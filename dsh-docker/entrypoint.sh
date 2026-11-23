@@ -4,11 +4,13 @@ set -e
 DSH_HOME="${DSH_HOME:-/data/dsh-home}"
 mkdir -p "${DSH_HOME}"
 
-# basic auth 优先级：CADDY_HASH（bcrypt）> BASIC_AUTH_PASSWORD（明文，自动 hash）
-# > 自动生成随机密码（持久化到 $DSH_HOME/INITIAL_PASSWORD.txt，重启沿用）
+# basic auth 优先级：CADDY_HASH（bcrypt）> 文件 secret /run/secrets/dsh_password
+# > BASIC_AUTH_PASSWORD（明文）> 自动生成随机密码（持久化到 $DSH_HOME/INITIAL_PASSWORD.txt，重启沿用）
 if [ -z "${CADDY_HASH}" ]; then
   PW_FILE="${DSH_HOME}/INITIAL_PASSWORD.txt"
-  if [ -n "${BASIC_AUTH_PASSWORD}" ]; then
+  if [ -f /run/secrets/dsh_password ]; then
+    PW="$(cat /run/secrets/dsh_password)"
+  elif [ -n "${BASIC_AUTH_PASSWORD}" ]; then
     PW="${BASIC_AUTH_PASSWORD}"
   elif [ -f "${PW_FILE}" ]; then
     PW="$(cat "${PW_FILE}")"

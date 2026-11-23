@@ -29,6 +29,11 @@ services:
       - CADDY_HASH=${CADDY_HASH:-}      # 不填 = 自动生成随机密码，写 data/dsh-home/INITIAL_PASSWORD.txt
       - ALLOWED_IPS=${ALLOWED_IPS:-}    # 不填 = 默认放行内网 + Tailscale 网段 + 回环
       - DSH_PORT=3080
+    # 可选：想自己定密码且不让它出现在 docker inspect / .env 里，用文件 secret（最安全的自定方式）：
+    #   echo '你的密码' > ./data/dsh-password && chmod 600 ./data/dsh-password
+    #   然后解开下一行注释，以及文件末尾的 secrets: 定义
+    # secrets:
+    #   - dsh_password
     volumes:
       - ./codespace:/data/workspace       # 代码持久化：dsh 工作区根目录（项目放这里）
       - ./data/dsh-home:/data/dsh-home    # 数据持久化：配置/凭据/INITIAL_PASSWORD.txt
@@ -36,3 +41,8 @@ services:
       # - ./data/go-cache:/root/go               # Go 模块缓存
       # - ./data/uv:/root/.local/share/uv        # uv 下载的 Python 版本
     restart: unless-stopped
+
+# 解开上面 service 里 secrets: 注释时，这里也要一起解开：
+# secrets:
+#   dsh_password:
+#     file: ./data/dsh-password
