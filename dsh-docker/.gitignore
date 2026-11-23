@@ -1,0 +1,4 @@
+.env
+/workspace/
+/dsh-home/
+/tailscale-state/

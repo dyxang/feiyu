@@ -1,0 +1,8 @@
+# 监听共享网络命名空间里的 8443：
+# 通过 Tailscale sidecar 模式，该端口只出现在 tailnet IP 上，公网/局域网不可达
+:8443 {
+	basic_auth {
+		dsh {$CADDY_HASH}
+	}
+	reverse_proxy 127.0.0.1:{$DSH_PORT:3080}
+}
