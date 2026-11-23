@@ -3,7 +3,7 @@ FROM caddy:2 AS caddy
 
 FROM golang:1.25-bookworm AS golang
 
-FROM node:22-bookworm-slim
+FROM node:24-bookworm-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
       tini \
