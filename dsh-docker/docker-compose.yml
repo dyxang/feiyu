@@ -1,36 +1,18 @@
-# DeepSeek Harness + Caddy，纯 Tailscale 访问
-# 访问入口：http://<tailnet-ip>:8443（仅 tailnet 内设备可达，无公网/局域网端口映射）
+# DeepSeek Harness + Caddy
+# Tailscale 不在本 compose 内（用你自己已有的容器）；Caddy 8443 发布到局域网，
+# dsh web 只绑容器内 127.0.0.1，Caddy 是唯一入口（IP 白名单 + basic auth 双层）
 services:
-  tailscale:
-    image: tailscale/tailscale:latest
-    container_name: dsh-tailscale
-    hostname: dsh-nas
-    environment:
-      - TS_AUTHKEY=${TAILSCALE_AUTHKEY:?请在 .env 中设置 TAILSCALE_AUTHKEY}
-      - TS_STATE_DIR=/var/lib/tailscale
-      - TS_USERSPACE=false
-      # - TS_EXTRA_ARGS=--advertise-exit-node   # 可选：让 NAS 兼做出口节点
-    volumes:
-      - ${TS_STATE_PATH:-./tailscale-state}:/var/lib/tailscale
-      - /dev/net/tun:/dev/net/tun
-    cap_add:
-      - NET_ADMIN
-    # 可选：取消注释后局域网设备也能经 http://NAS_IP:8443 直连（不再纯 tailnet）
-    # ports:
-    #   - "8443:8443"
-    restart: unless-stopped
-
   dsh:
     image: ${DSH_IMAGE:-ghcr.io/your-name/dsh-harness:latest}
-    # build: .          # 本地构建：docker compose build（需同时取消上一行 image 注释或保留均可）
-    network_mode: "service:tailscale"   # 共享 tailscale 网络栈，8443 只存在于 tailnet IP 上
+    # build: .           # 本地构建时取消注释
     container_name: dsh
+    ports:
+      - "8443:8443"     # 可写成 "<NAS局域网IP>:8443:8443" 只绑指定网卡
     environment:
       - CADDY_HASH=${CADDY_HASH:?请在 .env 中设置 CADDY_HASH}
+      - ALLOWED_IPS=${ALLOWED_IPS:-}
       - DSH_PORT=3080
     volumes:
       - ${DSH_WORKSPACE_PATH:-./workspace}:/data/workspace   # 项目代码（dsh 工作区根目录）
       - ${DSH_HOME_PATH:-./dsh-home}:/data/dsh-home          # settings.yaml / .credentials.yaml
-    depends_on:
-      - tailscale
     restart: unless-stopped

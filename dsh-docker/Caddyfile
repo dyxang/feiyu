@@ -1,6 +1,11 @@
-# 监听共享网络命名空间里的 8443：
-# 通过 Tailscale sidecar 模式，该端口只出现在 tailnet IP 上，公网/局域网不可达
+# 入口安全分两层：先做来源 IP 白名单，再过 basic auth
+# ALLOWED_IPS 由 entrypoint 提供默认值（内网网段 + Tailscale 网段 + 回环），可在 .env 收紧
 :8443 {
+	log
+
+	@denied not remote_ip {$ALLOWED_IPS}
+	respond @denied 403
+
 	basic_auth {
 		dsh {$CADDY_HASH}
 	}
