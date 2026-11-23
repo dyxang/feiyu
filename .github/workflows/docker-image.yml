@@ -53,6 +53,8 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v7 # .trivyignore 需要随仓库检出
+
       - uses: docker/login-action@v4
         with:
           registry: ghcr.io

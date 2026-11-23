@@ -1,7 +1,8 @@
 # DeepSeek Harness (dsh) + Caddy + Node.js + Python + Go + uv
 FROM caddy:2 AS caddy
 
-FROM golang:1.25-bookworm AS golang
+# Go 1.26.x：1.25 的 stdlib 存在 HIGH CVE（crypto/tls、crypto/x509、net/http），需 ≥1.26.10
+FROM golang:1.26-bookworm AS golang
 
 FROM ghcr.io/astral-sh/uv:latest AS uv
 
@@ -22,7 +23,21 @@ COPY --from=golang /usr/local/go /usr/local/go
 COPY --from=uv /uv /uvx /usr/local/bin/
 ENV PATH="/usr/local/go/bin:${PATH}"
 
-RUN npm install -g @deepseek-ai/dsh
+# 先升级 npm：node:24 自带的 npm 11 捆了 undici 6.28.0 / brace-expansion 5.0.9（HIGH CVE），npm 12 已修复
+RUN npm install -g npm@latest \
+ && npm install -g @deepseek-ai/dsh
+
+# 三个 dsh 子包把 undici 精确锁死在 8.11.2（HIGH CVE 需 8.12.2），精确版本无法用 overrides 修正，
+# 直接用 npm 官方 tarball 替换 dsh 下那份副本
+RUN set -eux; \
+    tmp="$(mktemp -d)"; \
+    cd "$tmp"; \
+    npm pack undici@8.12.2 >/dev/null; \
+    tar xzf undici-8.12.2.tgz; \
+    target="$(npm root -g)/@deepseek-ai/dsh/node_modules"; \
+    rm -rf "$target/undici"; \
+    mv package "$target/undici"; \
+    cd /; rm -rf "$tmp"
 
 ENV DSH_HOME=/data/dsh-home
 WORKDIR /data/workspace
