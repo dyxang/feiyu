@@ -26,47 +26,41 @@ Tailscale 用你自己已有的容器，本仓库只管 dsh 这一个容器。
 
 ## 使用
 
-### 1. 构建镜像
+### 快速开始（只改一处）
 
-Push 到你的 GitHub 仓库即可，Actions 自动构建并推送 `ghcr.io/<你的用户名>/dsh-harness:latest`（默认仅 linux/amd64；NAS 是 ARM 时在 workflow 里把 platforms 改成 `linux/amd64,linux/arm64`）。流水线 = 每周一自动重建（拉最新底座补丁与 dsh 新版）→ Trivy 漏洞扫描（发现 HIGH/CRITICAL 时该次运行标红）。
+1. **出镜像**：把本仓库 push 到你的 GitHub，等 Actions 首次构建完成（绿勾）。之后 CI 每周一自动重建（拉最新底座补丁与 dsh 新版）→ Trivy 漏洞扫描（发现 HIGH/CRITICAL 时该次运行标红）；默认仅 linux/amd64，NAS 是 ARM 时在 workflow 里把 platforms 改成 `linux/amd64,linux/arm64`。
+2. **部署**：NAS 上新建一个文件夹，把 `docker-compose.yml` 拷进去——文件顶部注释就是完整步骤。把 `image:` 行里的 `your-name` 换成你的 GitHub 用户名（或同目录建 `.env` 设 `DSH_IMAGE`），然后：
 
-### 2. NAS 上部署
+   ```bash
+   docker compose up -d
+   ```
 
-```bash
-git clone https://github.com/<你的用户名>/dsh-harness-docker.git
-cd dsh-harness-docker
-cp .env.example .env
-```
+3. **进入**：浏览器打开 `http://<NAS局域网IP>:8443`（远程设备经 Tailscale 访问同一地址）。用户名 `dsh`，密码：
 
-编辑 `.env`：
+   ```bash
+   cat data/dsh-home/INITIAL_PASSWORD.txt   # 或 docker logs dsh
+   ```
 
-- `DSH_IMAGE` 改成 `ghcr.io/<你的用户名>/dsh-harness:latest`
-- `CADDY_HASH`：`docker run --rm -it caddy:2 caddy hash-password` 生成后粘贴
-- `ALLOWED_IPS`（可选）：留空用默认；收紧示例 `ALLOWED_IPS=192.168.1.23 100.64.0.0/10`
+首次进入 Web UI：Settings → Models → Add a custom provider 接入你的本地 API 网关（Base URL 含 `/v1`、协议选 `openai-completions`、填 key）。文件方式参考 `examples/settings.yaml`：复制到 `data/dsh-home/settings.yaml`，key 写入 `data/dsh-home/.credentials.yaml`（`chmod 600`）。
 
-```bash
-docker compose pull
-docker compose up -d
-```
+### 可选配置（不改也能用，compose 里有对应注释）
 
-浏览器访问 `http://<NAS局域网IP>:8443`（远程设备经 Tailscale 访问同一地址）。用户名 `dsh`，密码为你 hash 前的明文。
-
-### 3. 接入你的本地 API 网关
-
-两种方式任选：
-
-- Web UI：Settings → Models → Add a custom provider，填 Base URL（含 `/v1`）、协议选 `openai-completions`、填 key
-- 文件：把 `examples/settings.yaml` 复制到 `data/dsh-home/settings.yaml` 改网关地址，key 写入 `data/dsh-home/.credentials.yaml`（`chmod 600`）
+| 想做的事 | 怎么做 |
+|---|---|
+| 自己定入口密码 | `.env` 里设 `CADDY_HASH`（bcrypt）或 `BASIC_AUTH_PASSWORD`（明文）；都不设 = 自动生成，写入 `data/dsh-home/INITIAL_PASSWORD.txt` |
+| 收紧 IP 白名单 | `.env` 里设 `ALLOWED_IPS`，例如 `ALLOWED_IPS=192.168.1.23 100.64.0.0/10` |
+| 只绑指定网卡 | compose 里 ports 改成 `"<NAS局域网IP>:8443:8443"` |
+| 缓存持久化 | 解开 compose 里 `go-cache` / `uv` 两行注释 |
 
 NAS 上的目录结构（挂载均为 compose 相对路径，相对 docker-compose.yml 所在目录）：
 
 ```
-dsh-harness-docker/
-├── docker-compose.yml
-├── .env
-├── codespace/      # 代码持久化：dsh 工作区根目录（项目放这里）
+dsh-harness-docker/      # 你新建的部署文件夹（名字随意）
+├── docker-compose.yml   # 从本仓库拷入的部署文件
+├── .env                 # 可选，不建也行
+├── codespace/           # 代码持久化：dsh 工作区根目录（项目放这里）
 └── data/
-    └── dsh-home/   # 数据持久化：settings.yaml / .credentials.yaml
+    └── dsh-home/        # 数据持久化：settings.yaml / .credentials.yaml / INITIAL_PASSWORD.txt
 ```
 
 ## 安全分层（按单人使用设计）
@@ -102,5 +96,5 @@ docker compose pull && docker compose up -d
 ## 排障
 
 - **403 Forbidden**：来源 IP 不在白名单。远程访问时先确认 Caddy 看到的来源 IP（`docker logs dsh` 里 Caddy 访问日志），必要时加进 `ALLOWED_IPS`
-- **401 进不去**：确认用的是 `CADDY_HASH` 对应的明文密码，用户名固定为 `dsh`
+- **401 进不去**：自动生成时密码在 `data/dsh-home/INITIAL_PASSWORD.txt`，或你 `.env` 里设置的密码；用户名固定为 `dsh`
 - **模型 401 / MISSING_CREDENTIAL**：Base URL 必须含 `/v1`；key 未被读到时检查 `.credentials.yaml` 权限与变量名是否和 `apiKeyEnv` 一致

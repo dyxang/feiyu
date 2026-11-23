@@ -1,14 +1,30 @@
 #!/bin/sh
 set -e
 
-# basic auth：优先 CADDY_HASH（bcrypt），否则用 BASIC_AUTH_PASSWORD 现场生成
-if [ -z "${CADDY_HASH}" ] && [ -n "${BASIC_AUTH_PASSWORD}" ]; then
-  CADDY_HASH="$(caddy hash-password --plaintext "${BASIC_AUTH_PASSWORD}")"
-  export CADDY_HASH
-fi
+DSH_HOME="${DSH_HOME:-/data/dsh-home}"
+mkdir -p "${DSH_HOME}"
+
+# basic auth 优先级：CADDY_HASH（bcrypt）> BASIC_AUTH_PASSWORD（明文，自动 hash）
+# > 自动生成随机密码（持久化到 $DSH_HOME/INITIAL_PASSWORD.txt，重启沿用）
 if [ -z "${CADDY_HASH}" ]; then
-  echo "ERROR: 请设置 CADDY_HASH（生成：docker run --rm caddy:2 caddy hash-password）或 BASIC_AUTH_PASSWORD" >&2
-  exit 1
+  PW_FILE="${DSH_HOME}/INITIAL_PASSWORD.txt"
+  if [ -n "${BASIC_AUTH_PASSWORD}" ]; then
+    PW="${BASIC_AUTH_PASSWORD}"
+  elif [ -f "${PW_FILE}" ]; then
+    PW="$(cat "${PW_FILE}")"
+  else
+    PW="$(tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 20)"
+    printf '%s\n' "${PW}" > "${PW_FILE}"
+    chmod 600 "${PW_FILE}"
+  fi
+  CADDY_HASH="$(caddy hash-password --plaintext "${PW}")"
+  export CADDY_HASH
+  echo "=================================================="
+  echo " dsh 入口密码已就绪"
+  echo "   用户名: dsh"
+  echo "   密码  : ${PW}"
+  echo "   （已写入 ${PW_FILE}，重启沿用同一密码）"
+  echo "=================================================="
 fi
 
 # 来源 IP 白名单默认值：内网网段（含 docker 桥接网段）+ Tailscale 网段 + 回环
@@ -16,8 +32,6 @@ fi
 # tailscale 容器的桥接 IP，已包含在 172.16.0.0/12 内；在 .env 设置 ALLOWED_IPS 可收紧
 : "${ALLOWED_IPS:=192.168.0.0/16 10.0.0.0/8 172.16.0.0/12 100.64.0.0/10 127.0.0.1 ::1}"
 export ALLOWED_IPS
-
-mkdir -p "${DSH_HOME:-/data/dsh-home}"
 
 caddy run --config /etc/caddy/Caddyfile --adapter caddyfile &
 exec dsh web --port "${DSH_PORT:-3080}"

@@ -1,20 +1,37 @@
-# DeepSeek Harness + Caddy
-# Tailscale 不在本 compose 内（用你自己已有的容器）；Caddy 8443 发布到局域网，
-# dsh web 只绑容器内 127.0.0.1，Caddy 是唯一入口（IP 白名单 + basic auth 双层）
+# ============================================================================
+# DeepSeek Harness（dsh）一键部署
+#
+# 步骤（唯一必改：把 your-name 换成你的 GitHub 用户名）：
+#   1. 把本仓库 push 到你的 GitHub，等 Actions 首次构建完成（绿勾）
+#      → 镜像自动推送到 ghcr.io/<你的用户名>/dsh-harness:latest
+#   2. NAS 上新建一个文件夹，把本文件命名为 docker-compose.yml 放进去
+#   3. 把下面 image: 行里的 your-name 换成你的 GitHub 用户名
+#      （或改为同目录建 .env 设 DSH_IMAGE，参考 .env.example）
+#   4. docker compose up -d
+#   5. 查看入口密码：cat data/dsh-home/INITIAL_PASSWORD.txt（或 docker logs dsh）
+#   6. 浏览器打开 http://<NAS局域网IP>:8443，用户名 dsh
+#   7. 首次进 Web UI：Settings → Models → Add a custom provider
+#      接入你的本地 API 网关（OpenAI 兼容、Base URL 含 /v1；
+#      文件方式参考仓库 examples/settings.yaml）
+#
+# 之后：CI 每周一自动重建镜像（底座安全补丁 + dsh 新版），
+#      NAS 上 docker compose pull && docker compose up -d 即完成更新。
+# 安全：入口三层 = 来源 IP 白名单（默认内网 + Tailscale 网段）→ basic auth
+#      → dsh 只绑容器内 127.0.0.1；公网无端口映射。
+# ============================================================================
 services:
   dsh:
-    image: ${DSH_IMAGE:-ghcr.io/your-name/dsh-harness:latest}
-    # build: .           # 本地构建时取消注释
+    image: ${DSH_IMAGE:-ghcr.io/your-name/dsh-harness:latest} # ← 唯一必改：your-name
     container_name: dsh
     ports:
       - "8443:8443"     # 可写成 "<NAS局域网IP>:8443:8443" 只绑指定网卡
     environment:
-      - CADDY_HASH=${CADDY_HASH:?请在 .env 中设置 CADDY_HASH}
-      - ALLOWED_IPS=${ALLOWED_IPS:-}
+      - CADDY_HASH=${CADDY_HASH:-}      # 不填 = 自动生成随机密码，写 data/dsh-home/INITIAL_PASSWORD.txt
+      - ALLOWED_IPS=${ALLOWED_IPS:-}    # 不填 = 默认放行内网 + Tailscale 网段 + 回环
       - DSH_PORT=3080
     volumes:
-      - ./codespace:/data/workspace       # 代码持久化：dsh 工作区根目录
-      - ./data/dsh-home:/data/dsh-home    # 数据持久化：settings.yaml / .credentials.yaml
+      - ./codespace:/data/workspace       # 代码持久化：dsh 工作区根目录（项目放这里）
+      - ./data/dsh-home:/data/dsh-home    # 数据持久化：配置/凭据/INITIAL_PASSWORD.txt
       # 可选：缓存持久化（避免重建容器后重新下载依赖）
       # - ./data/go-cache:/root/go               # Go 模块缓存
       # - ./data/uv:/root/.local/share/uv        # uv 下载的 Python 版本
