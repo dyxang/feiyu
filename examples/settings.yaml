@@ -1,0 +1,15 @@
+# 接入本地 OpenAI 兼容 API 网关（one-api / new-api 等）
+# 复制到 dsh-home/settings.yaml（挂载卷内）。API key 不要写在这个文件。
+llm-pi-ai:
+  providers:
+    my-gateway:                    # 自定义 provider ID，一旦使用不可改名
+      displayName: Local Gateway
+      apiKeyEnv: GATEWAY_API_KEY   # 引用凭据名，key 本体放 .credentials.yaml
+      api: openai-completions
+      baseURL: http://192.168.1.10:3000/v1   # 改成你的网关地址，须含 /v1
+      models:                      # models 列表会替换内置目录，需要什么写什么
+        - id: deepseek-chat
+        - id: deepseek-reasoner
+  agent-default-model:
+    provider: my-gateway
+    model: deepseek-chat
