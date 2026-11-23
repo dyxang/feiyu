@@ -13,6 +13,9 @@ services:
       - ALLOWED_IPS=${ALLOWED_IPS:-}
       - DSH_PORT=3080
     volumes:
-      - ${DSH_WORKSPACE_PATH:-./workspace}:/data/workspace   # 项目代码（dsh 工作区根目录）
-      - ${DSH_HOME_PATH:-./dsh-home}:/data/dsh-home          # settings.yaml / .credentials.yaml
+      - ./codespace:/data/workspace       # 代码持久化：dsh 工作区根目录
+      - ./data/dsh-home:/data/dsh-home    # 数据持久化：settings.yaml / .credentials.yaml
+      # 可选：缓存持久化（避免重建容器后重新下载依赖）
+      # - ./data/go-cache:/root/go               # Go 模块缓存
+      # - ./data/uv:/root/.local/share/uv        # uv 下载的 Python 版本
     restart: unless-stopped
