@@ -48,6 +48,7 @@ Tailscale 用你自己已有的容器，本仓库只管 dsh 这一个容器。
 | 想做的事 | 怎么做 |
 |---|---|
 | 自己定入口密码 | `.env` 里设 `CADDY_HASH`（bcrypt）或 `BASIC_AUTH_PASSWORD`（明文）；都不设 = 自动生成，写入 `data/dsh-home/INITIAL_PASSWORD.txt` |
+| 主动换密码（如怀疑泄露） | 删除 `data/dsh-home/INITIAL_PASSWORD.txt` 后 `docker compose up -d`，自动生成新密码 |
 | 收紧 IP 白名单 | `.env` 里设 `ALLOWED_IPS`，例如 `ALLOWED_IPS=192.168.1.23 100.64.0.0/10` |
 | 只绑指定网卡 | compose 里 ports 改成 `"<NAS局域网IP>:8443:8443"` |
 | 缓存持久化 | 解开 compose 里 `go-cache` / `uv` 两行注释 |
