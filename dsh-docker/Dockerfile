@@ -1,7 +1,9 @@
-# DeepSeek Harness (dsh) + Caddy + Node.js + Python + Go
+# DeepSeek Harness (dsh) + Caddy + Node.js + Python + Go + uv
 FROM caddy:2 AS caddy
 
 FROM golang:1.25-bookworm AS golang
+
+FROM ghcr.io/astral-sh/uv:latest AS uv
 
 FROM node:24-bookworm-slim
 
@@ -17,6 +19,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY --from=caddy /usr/bin/caddy /usr/bin/caddy
 COPY --from=golang /usr/local/go /usr/local/go
+COPY --from=uv /uv /uvx /usr/local/bin/
 ENV PATH="/usr/local/go/bin:${PATH}"
 
 RUN npm install -g @deepseek-ai/dsh
