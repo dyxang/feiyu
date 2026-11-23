@@ -56,9 +56,18 @@ docker compose up -d
 两种方式任选：
 
 - Web UI：Settings → Models → Add a custom provider，填 Base URL（含 `/v1`）、协议选 `openai-completions`、填 key
-- 文件：把 `examples/settings.yaml` 复制到 `dsh-home/settings.yaml` 改网关地址，key 写入 `dsh-home/.credentials.yaml`（`chmod 600`）
+- 文件：把 `examples/settings.yaml` 复制到 `data/dsh-home/settings.yaml` 改网关地址，key 写入 `data/dsh-home/.credentials.yaml`（`chmod 600`）
 
-数据都在挂载卷里：`workspace/`（项目代码）、`dsh-home/`（配置与凭据）。
+NAS 上的目录结构（挂载均为 compose 相对路径，相对 docker-compose.yml 所在目录）：
+
+```
+dsh-harness-docker/
+├── docker-compose.yml
+├── .env
+├── codespace/      # 代码持久化：dsh 工作区根目录（项目放这里）
+└── data/
+    └── dsh-home/   # 数据持久化：settings.yaml / .credentials.yaml
+```
 
 ## 安全分层（按单人使用设计）
 
