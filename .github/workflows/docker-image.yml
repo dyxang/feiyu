@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
   schedule:
-    - cron: "23 3 * * 1" # 每周一自动重建，跟进 @deepseek-ai/dsh 新版本
+    - cron: "23 3 * * *" # 每日自动重建，跟进 @deepseek-ai/dsh 与基础镜像补丁
   workflow_dispatch:
 
 permissions:
