@@ -14,6 +14,8 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
     steps:
       - uses: actions/checkout@v7
 
@@ -29,8 +31,15 @@ jobs:
         uses: docker/metadata-action@v6
         with:
           images: ghcr.io/${{ github.repository }}
+          # metadata-action 默认只在打 git tag / semver 时生成 latest，
+          # push 到分支只会产出 main，这里显式补上默认分支的 latest
+          tags: |
+            type=ref,event=branch
+            type=sha
+            type=raw,value=latest,enable={{is_default_branch}}
 
-      - uses: docker/build-push-action@v7
+      - id: build
+        uses: docker/build-push-action@v7
         with:
           context: .
           platforms: linux/amd64 # 默认只构建 amd64；NAS 是 ARM 时改成 linux/amd64,linux/arm64
@@ -53,7 +62,8 @@ jobs:
       - name: Trivy CVE 扫描（发现 HIGH/CRITICAL 则标记失败）
         uses: aquasecurity/trivy-action@v0.36.0
         with:
-          image-ref: ghcr.io/${{ github.repository }}:latest
+          # 按 digest 精确扫描本次构建产物，避免 latest tag 尚未就绪的竞态
+          image-ref: ghcr.io/${{ github.repository }}@${{ needs.build.outputs.digest }}
           scanners: vuln
           severity: HIGH,CRITICAL
           ignore-unfixed: true
