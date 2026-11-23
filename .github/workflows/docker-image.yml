@@ -29,6 +29,12 @@ jobs:
         uses: docker/metadata-action@v6
         with:
           images: ghcr.io/${{ github.repository }}
+          # metadata-action 默认只在打 git tag / semver 时生成 latest，
+          # push 到分支只会产出 main，这里显式补上默认分支的 latest
+          tags: |
+            type=ref,event=branch
+            type=sha
+            type=raw,value=latest,enable={{is_default_branch}}
 
       - uses: docker/build-push-action@v7
         with:
