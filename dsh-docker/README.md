@@ -1,6 +1,6 @@
 # dsh-harness-docker
 
-DeepSeek Harness（`dsh`）+ Caddy（IP 白名单 + basic auth）+ Node.js 22 + Python 3 的 Docker 镜像。
+DeepSeek Harness（`dsh`）+ Caddy（IP 白名单 + basic auth）+ Node.js 24 + Python 3.11（uv 可按项目装任意新版）+ Go 1.25 的 Docker 镜像。
 Tailscale 用你自己已有的容器，本仓库只管 dsh 这一个容器。
 
 ## 架构
@@ -28,7 +28,7 @@ Tailscale 用你自己已有的容器，本仓库只管 dsh 这一个容器。
 
 ### 1. 构建镜像
 
-Push 到你的 GitHub 仓库即可，Actions 自动构建并推送 `ghcr.io/<你的用户名>/dsh-harness:latest`（amd64 + arm64，每周自动重建跟进 dsh 新版本）。
+Push 到你的 GitHub 仓库即可，Actions 自动构建并推送 `ghcr.io/<你的用户名>/dsh-harness:latest`（默认仅 linux/amd64；NAS 是 ARM 时在 workflow 里把 platforms 改成 `linux/amd64,linux/arm64`）。流水线 = 每周一自动重建（拉最新底座补丁与 dsh 新版）→ Trivy 漏洞扫描（发现 HIGH/CRITICAL 时该次运行标红）。
 
 ### 2. NAS 上部署
 
@@ -83,11 +83,21 @@ dsh-harness-docker/
 
 ## 更新
 
-镜像由 CI 每周一自动重建；NAS 上手动更新：
+镜像由 CI 每周一自动重建（拉最新底座补丁与 dsh 新版），Trivy 扫描发现 HIGH/CRITICAL 漏洞时该次运行标红，看到后 `docker compose pull` 前先确认下个版本是否已修；NAS 上手动更新：
 
 ```bash
 docker compose pull && docker compose up -d
 ```
+
+组件版本与官方支持窗口（升级 = 改 Dockerfile 里对应 tag）：
+
+| 组件 | 版本 | 官方支持到 |
+|---|---|---|
+| Node.js | 24 LTS | 2028-04 |
+| Python | 3.11（Debian 维护，补丁回移植） | 2028-06（更新版用 uv 按项目装） |
+| Go | 1.25 | 2027-02 |
+| Debian 底座 | 12 bookworm | 2028 |
+| dsh / uv / Caddy | 跟随上游 | 每周重建自动跟进 |
 
 ## 排障
 
