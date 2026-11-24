@@ -38,13 +38,23 @@ export ALLOWED_IPS
 # dsh web 自身还有一层浏览器认证：启动时打印带一次性 token 的 URL，浏览器首次访问
 # 该 URL 换取会话 cookie；且它只信任 loopback / 绑定地址 / --trusted-host 点名的
 # Host。经 Caddy 反代从外部访问时（浏览器 Host 是 NAS 地址），必须用 DSH_TRUSTED_HOSTS
-# 把浏览器看到的地址加进信任列表，否则过完 basic auth 仍提示
-# "authentication required; reopen the URL printed by dsh web"
+# 把浏览器看到的地址加进信任列表，否则过完 basic auth 页面能开但每个 API 都 403。
+# 两个 flag 都先探测当前 dsh 是否支持再传：dsh 由 CI 跟随上游更新，
+# 老版本（--public-url 需 0.2.3-alpha.2+）不认这些参数会直接起不来。
 DSH_ARGS=""
+DSH_WEB_HELP="$(dsh web --help 2>&1 || true)"
 for h in ${DSH_TRUSTED_HOSTS:-}; do
-  DSH_ARGS="${DSH_ARGS} --trusted-host ${h}"
+  case "${DSH_WEB_HELP}" in
+    *--trusted-host*) DSH_ARGS="${DSH_ARGS} --trusted-host ${h}" ;;
+    *) echo "WARNING: 当前 dsh 不支持 --trusted-host，忽略 DSH_TRUSTED_HOSTS（Host 栅栏将拒绝外部访问）" ;;
+  esac
 done
-[ -n "${DSH_PUBLIC_URL:-}" ] && DSH_ARGS="${DSH_ARGS} --public-url ${DSH_PUBLIC_URL}"
+if [ -n "${DSH_PUBLIC_URL:-}" ]; then
+  case "${DSH_WEB_HELP}" in
+    *--public-url*) DSH_ARGS="${DSH_ARGS} --public-url ${DSH_PUBLIC_URL}" ;;
+    *) echo "WARNING: 当前 dsh（<0.2.3-alpha.2）不支持 --public-url，已忽略 DSH_PUBLIC_URL；日志里的 token 地址指向容器内，请把 ?token=... 手工拼到外部地址访问" ;;
+  esac
+fi
 
 caddy run --config /etc/caddy/Caddyfile --adapter caddyfile &
 # shellcheck disable=SC2086

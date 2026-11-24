@@ -102,7 +102,7 @@ docker compose pull && docker compose up -d
 - **403 Forbidden**：来源 IP 不在白名单。远程访问时先确认 Caddy 看到的来源 IP（`docker logs dsh` 里 Caddy 访问日志），必要时加进 `ALLOWED_IPS`
 - **401 进不去**：自动生成时密码在 `data/dsh-home/INITIAL_PASSWORD.txt`，或你 `.env` 里设置的密码；用户名固定为 `dsh`
 - **"dsh web authentication required; reopen the URL printed by dsh web"**：这是 `dsh web` 自己的浏览器认证（在 Caddy basic auth 之内还有一层），不是密码错了。它有两道门：
-  1. **Host 信任栅栏**：`dsh web` 只信任 loopback、绑定地址和 `--trusted-host` 点名的地址。你从浏览器经 Caddy 访问时 Host 是 NAS 地址，不在列表里，所有 API 都会被拒。解法：`.env` 设 `DSH_TRUSTED_HOSTS=192.168.1.23 100.101.102.103`（填你地址栏里实际用的主机名/IP，不带端口匹配任意端口，空格分隔多个），`docker compose up -d` 重建后生效（entrypoint 已把变量透传给 `dsh web`）。
-  2. **一次性启动 token**：`dsh web` 每次启动都生成新 token 并打印在日志里，浏览器首次访问带 token 的 URL 会换取会话 cookie，之后正常访问。解法：`docker logs dsh | grep "dsh web:"` 找到打印的地址；设了 `DSH_PUBLIC_URL` 时它就是可直接点开的外部地址（带 token），否则把其中 `?token=...` 部分手工拼到你自己的外部地址后面打开一次。
+  1. **Host 信任栅栏**：`dsh web` 只信任 loopback、绑定地址和 `--trusted-host` 点名的地址。你从浏览器经 Caddy 访问时 Host 是 NAS 地址，不在列表里——页面能开，但每个 API 调用都 403（如 `llm/listProviders failed: HTTP 403`）。解法：`.env` 设 `DSH_TRUSTED_HOSTS=192.168.1.23 100.101.102.103`（填你地址栏里实际用的主机名/IP，host 或 host:port，不带端口匹配任意端口，空格分隔多个），重建镜像并 `docker compose up -d`（entrypoint 会自动探测 dsh 版本并透传）。
+  2. **一次性启动 token**：`dsh web` 每次启动都生成新 token 并打印在日志里，浏览器首次访问带 token 的 URL 会换取会话 cookie，之后正常访问。解法：`docker logs dsh | grep "dsh web:"` 找到打印的地址，把其中 `?token=...` 手工拼到你自己的外部地址后面打开一次。设了 `DSH_PUBLIC_URL`（需 dsh ≥0.2.3-alpha.2，当前 latest 0.2.2-rc.5 不支持、会被自动忽略）时，日志打印的就是可直接点开的外部地址。
   每次重启容器 token 都会变，若又出现这个提示，重新取一次日志里的地址即可。
 - **模型 401 / MISSING_CREDENTIAL**：Base URL 必须含 `/v1`；key 未被读到时检查 `.credentials.yaml` 权限与变量名是否和 `apiKeyEnv` 一致

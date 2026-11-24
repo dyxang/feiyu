@@ -29,8 +29,8 @@ services:
       - CADDY_HASH=${CADDY_HASH:-}      # 不填 = 自动生成随机密码，写 data/dsh-home/INITIAL_PASSWORD.txt
       - ALLOWED_IPS=${ALLOWED_IPS:-}    # 不填 = 默认放行内网 + Tailscale 网段 + 回环
       - DSH_PORT=3080
-      - DSH_TRUSTED_HOSTS=${DSH_TRUSTED_HOSTS:-}  # 必填（外部访问时）：浏览器地址栏里的主机名/IP，空格分隔多个，见 README 排障
-      - DSH_PUBLIC_URL=${DSH_PUBLIC_URL:-}        # 可选：对外访问根 URL，让启动日志直接打印可点开的带 token 地址
+      - DSH_TRUSTED_HOSTS=${DSH_TRUSTED_HOSTS:-}  # 外部访问必填：浏览器地址栏里的主机名/IP（空格分隔多个），否则页面能开但 API 全 403
+      - DSH_PUBLIC_URL=${DSH_PUBLIC_URL:-}        # 可选，需 dsh ≥0.2.3-alpha.2（老版本自动忽略并打 WARNING）：对外根 URL，让日志直接打印可点开的带 token 地址
     # 可选：想自己定密码且不让它出现在 docker inspect / .env 里，用文件 secret（最安全的自定方式）：
     #   echo '你的密码' > ./data/dsh-password && chmod 600 ./data/dsh-password
     #   然后解开下一行注释，以及文件末尾的 secrets: 定义
