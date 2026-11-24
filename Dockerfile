@@ -26,14 +26,13 @@ COPY --from=uv /uv /uvx /usr/local/bin/
 ENV PATH="/usr/local/go/bin:${PATH}"
 
 # 先升级 npm：node:24 自带的 npm 11 捆了 undici 6.28.0 / brace-expansion 5.0.9（HIGH CVE），npm 12 已修复
-# pnpm 预装进镜像，容器内开箱即用
-RUN npm install -g npm@latest \
- && npm install -g pnpm \
- && npm install -g @deepseek-ai/dsh
-
-# 三个 dsh 子包把 undici 精确锁死在 8.11.2（HIGH CVE 需 8.12.2），精确版本无法用 overrides 修正，
-# 直接用 npm 官方 tarball 替换 dsh 下那份副本
+# pnpm 预装进镜像，容器内开箱即用；三个 dsh 子包把 undici 精确锁死在 8.11.2（HIGH CVE 需 8.12.2），
+# 精确版本无法用 overrides 修正，直接用 npm 官方 tarball 替换 dsh 下那份副本
+# （与安装放在同一层：跨层删除不会回收下层空间，旧副本会以死重形式留在镜像里）
 RUN set -eux; \
+    npm install -g npm@latest; \
+    npm install -g pnpm; \
+    npm install -g @deepseek-ai/dsh; \
     tmp="$(mktemp -d)"; \
     cd "$tmp"; \
     npm pack undici@8.12.2 >/dev/null; \
@@ -47,8 +46,7 @@ ENV DSH_HOME=/data/dsh-home
 WORKDIR /data/workspace
 
 COPY Caddyfile /etc/caddy/Caddyfile
-COPY entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+COPY --chmod=0755 entrypoint.sh /entrypoint.sh
 
 # 内置 chsrc（换源工具）：默认跟随 GitHub 最新正式版；CHSRC_VERSION 可固定版本。
 # 放在最后一层，CHSRC_REFRESH 由 CI 每次重置，避免构建缓存复用旧包、又能让拉取失败只影响这一层。

@@ -1,6 +1,6 @@
 # dsh-harness-docker
 
-DeepSeek Harness（`dsh`）+ Caddy（IP 白名单 + basic auth）+ Node.js 24 + Python 3.11（uv 可按项目装任意新版）+ Go 1.25 的 Docker 镜像。
+DeepSeek Harness（`dsh`）+ Caddy（IP 白名单 + basic auth）+ Node.js 24 + Python 3.11（uv 可按项目装任意新版）+ Go 1.26 的 Docker 镜像。
 Tailscale 用你自己已有的容器，本仓库只管 dsh 这一个容器。
 
 ## 架构
@@ -16,7 +16,7 @@ Tailscale 用你自己已有的容器，本仓库只管 dsh 这一个容器。
 │              │                                         │
 │              ├─ 第1层：来源 IP 白名单（remote_ip）       │
 │              └─ 第2层：basic auth（bcrypt）             │
-│  Node 24 · Python 3.11 + uv · Go 1.25 · Git             │
+│  Node 24 · Python 3.11 + uv · Go 1.26 · Git             │
 └───────────────────────────────────────────────────────┘
    公网：无端口映射，不可达
 ```
@@ -94,7 +94,7 @@ docker compose pull && docker compose up -d
 |---|---|---|
 | Node.js | 24 LTS | 2028-04 |
 | Python | 3.11（Debian 维护，补丁回移植） | 2028-06（更新版用 uv 按项目装） |
-| Go | 1.25 | 2027-02 |
+| Go | 1.26 | 2027-08 |
 | Debian 底座 | 12 bookworm | 2028 |
 | dsh / uv / Caddy / pnpm | 跟随上游 | 每周重建自动跟进 |
 
