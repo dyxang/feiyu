@@ -25,24 +25,6 @@ COPY --from=golang /usr/local/go /usr/local/go
 COPY --from=uv /uv /uvx /usr/local/bin/
 ENV PATH="/usr/local/go/bin:${PATH}"
 
-# 内置 chsrc（全平台换源工具）：运行时由 entrypoint 按容器实际网络测速，自动挑最快镜像。
-# 版本固定，升级改 CHSRC_VERSION；GitHub 拉不到时回退 Gitee（国内构建更稳）。
-ARG CHSRC_VERSION=v0.2.7
-ARG TARGETARCH=amd64
-RUN set -eux; \
-    case "${TARGETARCH}" in \
-      amd64) chsrc_arch=x64 ;; \
-      arm64) chsrc_arch=aarch64 ;; \
-      arm)   chsrc_arch=armv7 ;; \
-      riscv64) chsrc_arch=riscv64 ;; \
-      *) echo "chsrc: 不支持的架构 ${TARGETARCH}" >&2; exit 1 ;; \
-    esac; \
-    if ! curl -fsSL "https://github.com/RubyMetric/chsrc/releases/download/${CHSRC_VERSION}/chsrc-${chsrc_arch}-linux" -o /usr/local/bin/chsrc; then \
-      curl -fsSL "https://gitee.com/RubyMetric/chsrc/releases/download/${CHSRC_VERSION}/chsrc-${chsrc_arch}-linux" -o /usr/local/bin/chsrc; \
-    fi; \
-    chmod +x /usr/local/bin/chsrc; \
-    chsrc --version
-
 # 先升级 npm：node:24 自带的 npm 11 捆了 undici 6.28.0 / brace-expansion 5.0.9（HIGH CVE），npm 12 已修复
 # pnpm 预装进镜像，容器内开箱即用
 RUN npm install -g npm@latest \
@@ -67,6 +49,33 @@ WORKDIR /data/workspace
 COPY Caddyfile /etc/caddy/Caddyfile
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
+
+# 内置 chsrc（换源工具）：默认跟随 GitHub 最新正式版；CHSRC_VERSION 可固定版本。
+# 放在最后一层，CHSRC_REFRESH 由 CI 每次重置，避免构建缓存复用旧包、又能让拉取失败只影响这一层。
+ARG CHSRC_VERSION=latest
+ARG CHSRC_REFRESH=0
+ARG TARGETARCH=amd64
+RUN set -eux; \
+    echo "chsrc: version=${CHSRC_VERSION} refresh=${CHSRC_REFRESH}"; \
+    case "${TARGETARCH}" in \
+      amd64) chsrc_arch=x64 ;; \
+      arm64) chsrc_arch=aarch64 ;; \
+      arm)   chsrc_arch=armv7 ;; \
+      riscv64) chsrc_arch=riscv64 ;; \
+      *) echo "chsrc: 不支持的架构 ${TARGETARCH}" >&2; exit 1 ;; \
+    esac; \
+    if [ "${CHSRC_VERSION}" = "latest" ]; then \
+      want="https://github.com/RubyMetric/chsrc/releases/latest/download/chsrc-${chsrc_arch}-linux"; \
+      spare="https://gitee.com/RubyMetric/chsrc/releases/download/pre/chsrc-${chsrc_arch}-linux"; \
+    else \
+      want="https://github.com/RubyMetric/chsrc/releases/download/${CHSRC_VERSION}/chsrc-${chsrc_arch}-linux"; \
+      spare="https://gitee.com/RubyMetric/chsrc/releases/download/${CHSRC_VERSION}/chsrc-${chsrc_arch}-linux"; \
+    fi; \
+    if ! curl -fsSL "$want" -o /usr/local/bin/chsrc; then \
+      curl -fsSL "$spare" -o /usr/local/bin/chsrc; \
+    fi; \
+    chmod +x /usr/local/bin/chsrc; \
+    chsrc --version
 
 # 仅 Caddy 对外；dsh 只绑容器内 127.0.0.1
 EXPOSE 8443

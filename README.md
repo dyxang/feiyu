@@ -98,7 +98,7 @@ docker compose pull && docker compose up -d
 | Debian 底座 | 12 bookworm | 2028 |
 | dsh / uv / Caddy / pnpm | 跟随上游 | 每周重建自动跟进 |
 
-镜像内置 [chsrc](https://github.com/RubyMetric/chsrc)（v0.2.7）：容器启动时在后台按实际网络测速，自动把 apt / npm / pnpm / pip / uv / go 换到最快的国内镜像，不写死任何源，换网络环境无需改配置，详情见容器内 `/var/log/chsrc.log`。chsrc 为 GPL-3.0 软件，随镜像分发需遵守其许可证。
+镜像内置 [chsrc](https://github.com/RubyMetric/chsrc)（默认跟随 GitHub 最新正式版，每次重建自动升级；需要可复现时用 `--build-arg CHSRC_VERSION=v0.2.7` 固定）：容器启动时在后台按实际网络测速，自动把 apt / npm / pnpm / pip / uv / go 换到最快的国内镜像，不写死任何源，换网络环境无需改配置，详情见容器内 `/var/log/chsrc.log`。chsrc 为 GPL-3.0 软件，随镜像分发需遵守其许可证。
 
 ## 排障
 

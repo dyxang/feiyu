@@ -46,6 +46,9 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          # 每天重建时刷新内置 chsrc 到最新正式版（否则该层会被构建缓存命中）
+          build-args: |
+            CHSRC_REFRESH=${{ github.run_id }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
