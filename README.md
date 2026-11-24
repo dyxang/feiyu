@@ -54,6 +54,7 @@ Tailscale 用你自己已有的容器，本仓库只管 dsh 这一个容器。
 | 收紧 IP 白名单 | `.env` 里设 `ALLOWED_IPS`，例如 `ALLOWED_IPS=192.168.1.23 100.64.0.0/10` |
 | 过 dsh 自己那层认证 | `.env` 里设 `DSH_TRUSTED_HOSTS`（浏览器地址栏里的主机名/IP，空格分隔），并设 `DSH_PUBLIC_URL=http://<NAS局域网IP>:8443` 让启动日志直接打印可点开的带 token 地址 |
 | 只绑指定网卡 | compose 里 ports 改成 `"<NAS局域网IP>:8443:8443"` |
+| 换镜像源/回官方源 | compose 的 `environment:` 里覆盖对应变量：`NPM_CONFIG_REGISTRY`（npm/pnpm）、`GOPROXY`（go）、`PIP_INDEX_URL`（pip）、`UV_DEFAULT_INDEX`（uv）；官方源分别为 `https://registry.npmjs.org`、`https://proxy.golang.org,direct`、`https://pypi.org/simple`、`https://pypi.org/simple` |
 | 缓存持久化 | 解开 compose 里 `go-cache` / `uv` 两行注释 |
 
 NAS 上的目录结构（挂载均为 compose 相对路径，相对 docker-compose.yml 所在目录）：
@@ -95,7 +96,9 @@ docker compose pull && docker compose up -d
 | Python | 3.11（Debian 维护，补丁回移植） | 2028-06（更新版用 uv 按项目装） |
 | Go | 1.25 | 2027-02 |
 | Debian 底座 | 12 bookworm | 2028 |
-| dsh / uv / Caddy | 跟随上游 | 每周重建自动跟进 |
+| dsh / uv / Caddy / pnpm | 跟随上游 | 每周重建自动跟进 |
+
+镜像已内置国内镜像源默认值（容器内 `npm`/`pnpm` → 淘宝 npmmirror，`go get` → 七牛 goproxy.cn，`pip`/`uv` → 清华 PyPI），构建期不受影响；换源见「可选配置」。
 
 ## 排障
 
