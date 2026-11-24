@@ -43,8 +43,3 @@ services:
       # - ./data/go-cache:/root/go               # Go 模块缓存
       # - ./data/uv:/root/.local/share/uv        # uv 下载的 Python 版本
     restart: unless-stopped
-
-# 解开上面 service 里 secrets: 注释时，这里也要一起解开：
-# secrets:
-#   dsh_password:
-#     file: ./data/dsh-password
