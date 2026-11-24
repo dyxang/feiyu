@@ -8,9 +8,11 @@ FROM ghcr.io/astral-sh/uv:latest AS uv
 
 FROM node:24-bookworm-slim
 
+# 构建期 apt 走官方源（CI 在境外，走国内源反而慢）；运行时的换源交给内置的 chsrc
 RUN apt-get update && apt-get install -y --no-install-recommends \
       tini \
       git \
+      openssh-client \
       ca-certificates \
       curl \
       python3 \
@@ -41,20 +43,39 @@ RUN set -eux; \
     mv package "$target/undici"; \
     cd /; rm -rf "$tmp"
 
-# 容器内开发默认走国内镜像源（npm/pnpm → 淘宝，Go → 七牛，pip/uv → 清华）。
-# 放在安装步骤之后：构建期仍走官方源（CI 上更稳），只影响运行时默认值；
-# 想换源/回官方源，在 compose 的 environment 里覆盖对应变量即可。
-ENV NPM_CONFIG_REGISTRY=https://registry.npmmirror.com \
-    GOPROXY=https://goproxy.cn,direct \
-    PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple \
-    UV_DEFAULT_INDEX=https://pypi.tuna.tsinghua.edu.cn/simple
-
 ENV DSH_HOME=/data/dsh-home
 WORKDIR /data/workspace
 
 COPY Caddyfile /etc/caddy/Caddyfile
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
+
+# 内置 chsrc（换源工具）：默认跟随 GitHub 最新正式版；CHSRC_VERSION 可固定版本。
+# 放在最后一层，CHSRC_REFRESH 由 CI 每次重置，避免构建缓存复用旧包、又能让拉取失败只影响这一层。
+ARG CHSRC_VERSION=latest
+ARG CHSRC_REFRESH=0
+ARG TARGETARCH=amd64
+RUN set -eux; \
+    echo "chsrc: version=${CHSRC_VERSION} refresh=${CHSRC_REFRESH}"; \
+    case "${TARGETARCH}" in \
+      amd64) chsrc_arch=x64 ;; \
+      arm64) chsrc_arch=aarch64 ;; \
+      arm)   chsrc_arch=armv7 ;; \
+      riscv64) chsrc_arch=riscv64 ;; \
+      *) echo "chsrc: 不支持的架构 ${TARGETARCH}" >&2; exit 1 ;; \
+    esac; \
+    if [ "${CHSRC_VERSION}" = "latest" ]; then \
+      want="https://github.com/RubyMetric/chsrc/releases/latest/download/chsrc-${chsrc_arch}-linux"; \
+      spare="https://gitee.com/RubyMetric/chsrc/releases/download/pre/chsrc-${chsrc_arch}-linux"; \
+    else \
+      want="https://github.com/RubyMetric/chsrc/releases/download/${CHSRC_VERSION}/chsrc-${chsrc_arch}-linux"; \
+      spare="https://gitee.com/RubyMetric/chsrc/releases/download/${CHSRC_VERSION}/chsrc-${chsrc_arch}-linux"; \
+    fi; \
+    if ! curl -fsSL "$want" -o /usr/local/bin/chsrc; then \
+      curl -fsSL "$spare" -o /usr/local/bin/chsrc; \
+    fi; \
+    chmod +x /usr/local/bin/chsrc; \
+    chsrc --version
 
 # 仅 Caddy 对外；dsh 只绑容器内 127.0.0.1
 EXPOSE 8443

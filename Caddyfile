@@ -1,7 +1,16 @@
 # 入口安全分两层：先做来源 IP 白名单，再过 basic auth
 # ALLOWED_IPS 由 entrypoint 提供默认值（内网网段 + Tailscale 网段 + 回环），可在 .env 收紧
 :8443 {
-	log
+	# 访问日志写容器内文件并限大小轮转：不落宿主机卷，也不刷屏盖掉 dsh 启动时打印的 token 地址。
+	# 查看：docker exec dsh grep -o '"uri":"[^"]*"' /var/log/caddy/access.log*
+	# 注意日志随容器重建而丢失，且 token 在 URL 里，需要留档请自行 docker cp 取出。
+	log {
+		output file /var/log/caddy/access.log {
+			roll_size 20MiB
+			roll_keep 3
+			roll_keep_for 72h
+		}
+	}
 
 	@denied not remote_ip {$ALLOWED_IPS}
 	respond @denied 403

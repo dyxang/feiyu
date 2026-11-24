@@ -54,7 +54,7 @@ Tailscale 用你自己已有的容器，本仓库只管 dsh 这一个容器。
 | 收紧 IP 白名单 | `.env` 里设 `ALLOWED_IPS`，例如 `ALLOWED_IPS=192.168.1.23 100.64.0.0/10` |
 | 过 dsh 自己那层认证 | `.env` 里设 `DSH_TRUSTED_HOSTS`（浏览器地址栏里的主机名/IP，空格分隔），并设 `DSH_PUBLIC_URL=http://<NAS局域网IP>:8443` 让启动日志直接打印可点开的带 token 地址 |
 | 只绑指定网卡 | compose 里 ports 改成 `"<NAS局域网IP>:8443:8443"` |
-| 换镜像源/回官方源 | compose 的 `environment:` 里覆盖对应变量：`NPM_CONFIG_REGISTRY`（npm/pnpm）、`GOPROXY`（go）、`PIP_INDEX_URL`（pip）、`UV_DEFAULT_INDEX`（uv）；官方源分别为 `https://registry.npmjs.org`、`https://proxy.golang.org,direct`、`https://pypi.org/simple`、`https://pypi.org/simple` |
+| 换镜像源/回官方源 | 镜像内置 [chsrc](https://github.com/RubyMetric/chsrc)：容器启动时后台按实际网络测速，自动为 apt / npm / pnpm / pip / uv / go 选最快国内镜像；手动重测 `docker exec -it dsh chsrc set <dish>`，回官方源 `docker exec -it dsh chsrc reset <dish>`，日志 `/var/log/chsrc.log` |
 | 缓存持久化 | 解开 compose 里 `go-cache` / `uv` 两行注释 |
 
 NAS 上的目录结构（挂载均为 compose 相对路径，相对 docker-compose.yml 所在目录）：
@@ -98,11 +98,11 @@ docker compose pull && docker compose up -d
 | Debian 底座 | 12 bookworm | 2028 |
 | dsh / uv / Caddy / pnpm | 跟随上游 | 每周重建自动跟进 |
 
-镜像已内置国内镜像源默认值（容器内 `npm`/`pnpm` → 淘宝 npmmirror，`go get` → 七牛 goproxy.cn，`pip`/`uv` → 清华 PyPI），构建期不受影响；换源见「可选配置」。
+镜像内置 [chsrc](https://github.com/RubyMetric/chsrc)（默认跟随 GitHub 最新正式版，每次重建自动升级；需要可复现时用 `--build-arg CHSRC_VERSION=v0.2.7` 固定）：容器启动时在后台按实际网络测速，自动把 apt / npm / pnpm / pip / uv / go 换到最快的国内镜像，不写死任何源，换网络环境无需改配置，详情见容器内 `/var/log/chsrc.log`。chsrc 为 GPL-3.0 软件，随镜像分发需遵守其许可证。
 
 ## 排障
 
-- **403 Forbidden**：来源 IP 不在白名单。远程访问时先确认 Caddy 看到的来源 IP（`docker logs dsh` 里 Caddy 访问日志），必要时加进 `ALLOWED_IPS`
+- **403 Forbidden**：来源 IP 不在白名单。远程访问时先确认 Caddy 看到的来源 IP（`docker exec dsh grep '"status":403' /var/log/caddy/access.log*`，访问日志写容器内文件，不再混进 `docker logs`），必要时加进 `ALLOWED_IPS`
 - **401 进不去**：自动生成时密码在 `data/dsh-home/INITIAL_PASSWORD.txt`，或你 `.env` 里设置的密码；用户名固定为 `dsh`
 - **"dsh web authentication required; reopen the URL printed by dsh web"**：这是 `dsh web` 自己的浏览器认证（在 Caddy basic auth 之内还有一层），不是密码错了。它有两道门：
   1. **Host 信任栅栏**：`dsh web` 只信任 loopback、绑定地址和 `--trusted-host` 点名的地址。你从浏览器经 Caddy 访问时 Host 是 NAS 地址，不在列表里——页面能开，但每个 API 调用都 403（如 `llm/listProviders failed: HTTP 403`）。解法：`.env` 设 `DSH_TRUSTED_HOSTS=192.168.1.23 100.101.102.103`（填你地址栏里实际用的主机名/IP，host 或 host:port，不带端口匹配任意端口，空格分隔多个），重建镜像并 `docker compose up -d`（entrypoint 会自动探测 dsh 版本并透传）。
