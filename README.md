@@ -102,7 +102,6 @@ docker compose pull && docker compose up -d
 
 ## 排障
 
-- **「选择工作区目录」弹窗里看不到外挂的 codespace**：dsh 的目录选择器每次打开都定位在主目录（容器内 `/root`），且面包屑不显示主目录以上的层级，而 codespace 挂载在 `/data/workspace`。两条路：① 镜像已在主目录内置入口链接 `codespace`（新版镜像直接点进它 → 打开）；② 或点面包屑右侧的铅笔图标（编辑路径），输入 `/data/workspace` 回车再「打开」。选过一次就会持久记住，之后在工作区列表直接选。
 - **403 Forbidden**：来源 IP 不在白名单。远程访问时先确认 Caddy 看到的来源 IP（`docker logs dsh` 里 Caddy 访问日志），必要时加进 `ALLOWED_IPS`
 - **401 进不去**：自动生成时密码在 `data/dsh-home/INITIAL_PASSWORD.txt`，或你 `.env` 里设置的密码；用户名固定为 `dsh`
 - **"dsh web authentication required; reopen the URL printed by dsh web"**：这是 `dsh web` 自己的浏览器认证（在 Caddy basic auth 之内还有一层），不是密码错了。它有两道门：
