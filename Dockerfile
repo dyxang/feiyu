@@ -52,6 +52,12 @@ ENV NPM_CONFIG_REGISTRY=https://registry.npmmirror.com \
 ENV DSH_HOME=/data/dsh-home
 WORKDIR /data/workspace
 
+# dsh 的「选择工作区目录」弹窗每次都从主目录（/root）起步，且面包屑不显示
+# 主目录以上的层级——外挂的 codespace 挂在 /data/workspace，从主目录无路可点。
+# 在主目录放一个入口符号链接，弹窗首页直接可见、可进（选择后会以 realpath
+# /data/workspace 注册为工作区，持久保存在 DSH_HOME）。
+RUN ln -s /data/workspace /root/codespace
+
 COPY Caddyfile /etc/caddy/Caddyfile
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
