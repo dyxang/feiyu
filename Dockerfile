@@ -24,7 +24,9 @@ COPY --from=uv /uv /uvx /usr/local/bin/
 ENV PATH="/usr/local/go/bin:${PATH}"
 
 # 先升级 npm：node:24 自带的 npm 11 捆了 undici 6.28.0 / brace-expansion 5.0.9（HIGH CVE），npm 12 已修复
+# pnpm 预装进镜像，容器内开箱即用
 RUN npm install -g npm@latest \
+ && npm install -g pnpm \
  && npm install -g @deepseek-ai/dsh
 
 # 三个 dsh 子包把 undici 精确锁死在 8.11.2（HIGH CVE 需 8.12.2），精确版本无法用 overrides 修正，
@@ -38,6 +40,14 @@ RUN set -eux; \
     rm -rf "$target/undici"; \
     mv package "$target/undici"; \
     cd /; rm -rf "$tmp"
+
+# 容器内开发默认走国内镜像源（npm/pnpm → 淘宝，Go → 七牛，pip/uv → 清华）。
+# 放在安装步骤之后：构建期仍走官方源（CI 上更稳），只影响运行时默认值；
+# 想换源/回官方源，在 compose 的 environment 里覆盖对应变量即可。
+ENV NPM_CONFIG_REGISTRY=https://registry.npmmirror.com \
+    GOPROXY=https://goproxy.cn,direct \
+    PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple \
+    UV_DEFAULT_INDEX=https://pypi.tuna.tsinghua.edu.cn/simple
 
 ENV DSH_HOME=/data/dsh-home
 WORKDIR /data/workspace
