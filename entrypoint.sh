@@ -56,6 +56,19 @@ if [ -n "${DSH_PUBLIC_URL:-}" ]; then
   esac
 fi
 
+# 内置 chsrc：启动时按容器实际网络测速，把 apt/npm/pnpm/pip/uv/go 换到最快国内镜像。
+# 后台执行：不阻塞 dsh 启动，也不往 stdout 刷屏；详情见 /var/log/chsrc.log，失败不影响启动。
+# 手动重测：chsrc set <dish>；回官方源：chsrc reset <dish>
+if command -v chsrc >/dev/null 2>&1; then
+  echo "chsrc: 后台按实际网络测速换源中，详情 /var/log/chsrc.log"
+  (
+    for d in debian npm pnpm pip uv go; do
+      timeout 60 chsrc set "${d}" || true
+    done
+  ) >>/var/log/chsrc.log 2>&1 &
+fi
+
+mkdir -p /var/log/caddy
 caddy run --config /etc/caddy/Caddyfile --adapter caddyfile &
 # shellcheck disable=SC2086
 exec dsh web --port "${DSH_PORT:-3080}" ${DSH_ARGS}
