@@ -56,6 +56,7 @@ if [ -n "${DSH_PUBLIC_URL:-}" ]; then
   esac
 fi
 
+mkdir -p /var/log/caddy
 caddy run --config /etc/caddy/Caddyfile --adapter caddyfile &
 # shellcheck disable=SC2086
 exec dsh web --port "${DSH_PORT:-3080}" ${DSH_ARGS}
