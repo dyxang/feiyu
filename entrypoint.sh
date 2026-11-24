@@ -35,5 +35,17 @@ fi
 : "${ALLOWED_IPS:=192.168.0.0/16 10.0.0.0/8 172.16.0.0/12 100.64.0.0/10 127.0.0.1 ::1}"
 export ALLOWED_IPS
 
+# dsh web 自身还有一层浏览器认证：启动时打印带一次性 token 的 URL，浏览器首次访问
+# 该 URL 换取会话 cookie；且它只信任 loopback / 绑定地址 / --trusted-host 点名的
+# Host。经 Caddy 反代从外部访问时（浏览器 Host 是 NAS 地址），必须用 DSH_TRUSTED_HOSTS
+# 把浏览器看到的地址加进信任列表，否则过完 basic auth 仍提示
+# "authentication required; reopen the URL printed by dsh web"
+DSH_ARGS=""
+for h in ${DSH_TRUSTED_HOSTS:-}; do
+  DSH_ARGS="${DSH_ARGS} --trusted-host ${h}"
+done
+[ -n "${DSH_PUBLIC_URL:-}" ] && DSH_ARGS="${DSH_ARGS} --public-url ${DSH_PUBLIC_URL}"
+
 caddy run --config /etc/caddy/Caddyfile --adapter caddyfile &
-exec dsh web --port "${DSH_PORT:-3080}"
+# shellcheck disable=SC2086
+exec dsh web --port "${DSH_PORT:-3080}" ${DSH_ARGS}

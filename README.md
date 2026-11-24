@@ -41,6 +41,8 @@ Tailscale 用你自己已有的容器，本仓库只管 dsh 这一个容器。
    cat data/dsh-home/INITIAL_PASSWORD.txt   # 或 docker logs dsh
    ```
 
+   注意：`dsh web` 在 basic auth 之内还有自己的一层浏览器认证，首次进入（及每次重启容器后）需要用启动日志里带 token 的地址换取会话 cookie，见下文「DSH_TRUSTED_HOSTS」与排障第 3 条。
+
 首次进入 Web UI：Settings → Models → Add a custom provider 接入你的本地 API 网关（Base URL 含 `/v1`、协议选 `openai-completions`、填 key）。文件方式参考 `examples/settings.yaml`：复制到 `data/dsh-home/settings.yaml`，key 写入 `data/dsh-home/.credentials.yaml`（`chmod 600`）。
 
 ### 可选配置（不改也能用，compose 里有对应注释）
@@ -50,6 +52,7 @@ Tailscale 用你自己已有的容器，本仓库只管 dsh 这一个容器。
 | 自己定入口密码 | 三选一（按安全排序）：文件 secret（见 compose 注释，inspect 不可见）＞ `.env` 设 `BASIC_AUTH_PASSWORD` ＞ `.env` 设 `CADDY_HASH`（bcrypt）；都不设 = 自动生成，写入 `data/dsh-home/INITIAL_PASSWORD.txt` |
 | 主动换密码（如怀疑泄露） | 删除 `data/dsh-home/INITIAL_PASSWORD.txt` 后 `docker compose up -d`，自动生成新密码 |
 | 收紧 IP 白名单 | `.env` 里设 `ALLOWED_IPS`，例如 `ALLOWED_IPS=192.168.1.23 100.64.0.0/10` |
+| 过 dsh 自己那层认证 | `.env` 里设 `DSH_TRUSTED_HOSTS`（浏览器地址栏里的主机名/IP，空格分隔），并设 `DSH_PUBLIC_URL=http://<NAS局域网IP>:8443` 让启动日志直接打印可点开的带 token 地址 |
 | 只绑指定网卡 | compose 里 ports 改成 `"<NAS局域网IP>:8443:8443"` |
 | 缓存持久化 | 解开 compose 里 `go-cache` / `uv` 两行注释 |
 
@@ -98,4 +101,8 @@ docker compose pull && docker compose up -d
 
 - **403 Forbidden**：来源 IP 不在白名单。远程访问时先确认 Caddy 看到的来源 IP（`docker logs dsh` 里 Caddy 访问日志），必要时加进 `ALLOWED_IPS`
 - **401 进不去**：自动生成时密码在 `data/dsh-home/INITIAL_PASSWORD.txt`，或你 `.env` 里设置的密码；用户名固定为 `dsh`
+- **"dsh web authentication required; reopen the URL printed by dsh web"**：这是 `dsh web` 自己的浏览器认证（在 Caddy basic auth 之内还有一层），不是密码错了。它有两道门：
+  1. **Host 信任栅栏**：`dsh web` 只信任 loopback、绑定地址和 `--trusted-host` 点名的地址。你从浏览器经 Caddy 访问时 Host 是 NAS 地址，不在列表里，所有 API 都会被拒。解法：`.env` 设 `DSH_TRUSTED_HOSTS=192.168.1.23 100.101.102.103`（填你地址栏里实际用的主机名/IP，不带端口匹配任意端口，空格分隔多个），`docker compose up -d` 重建后生效（entrypoint 已把变量透传给 `dsh web`）。
+  2. **一次性启动 token**：`dsh web` 每次启动都生成新 token 并打印在日志里，浏览器首次访问带 token 的 URL 会换取会话 cookie，之后正常访问。解法：`docker logs dsh | grep "dsh web:"` 找到打印的地址；设了 `DSH_PUBLIC_URL` 时它就是可直接点开的外部地址（带 token），否则把其中 `?token=...` 部分手工拼到你自己的外部地址后面打开一次。
+  每次重启容器 token 都会变，若又出现这个提示，重新取一次日志里的地址即可。
 - **模型 401 / MISSING_CREDENTIAL**：Base URL 必须含 `/v1`；key 未被读到时检查 `.credentials.yaml` 权限与变量名是否和 `apiKeyEnv` 一致
