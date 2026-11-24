@@ -8,15 +8,8 @@ FROM ghcr.io/astral-sh/uv:latest AS uv
 
 FROM node:24-bookworm-slim
 
-# apt 默认走清华镜像（--build-arg APT_MIRROR=deb.debian.org 可切回官方源）。
-# 改的是镜像里的 sources.list，所以容器内运行时 apt-get 也走同一个源。
-ARG APT_MIRROR=mirrors.tuna.tsinghua.edu.cn
-RUN set -eux; \
-    for f in /etc/apt/sources.list /etc/apt/sources.list.d/*.sources; do \
-      [ -f "$f" ] || continue; \
-      sed -i "s|deb.debian.org|${APT_MIRROR}|g; s|security.debian.org|${APT_MIRROR}|g" "$f"; \
-    done; \
-    apt-get update && apt-get install -y --no-install-recommends \
+# 构建期 apt 走官方源（CI 在境外，走国内源反而慢）；运行时的换源交给内置的 chsrc
+RUN apt-get update && apt-get install -y --no-install-recommends \
       tini \
       git \
       openssh-client \
@@ -31,6 +24,24 @@ COPY --from=caddy /usr/bin/caddy /usr/bin/caddy
 COPY --from=golang /usr/local/go /usr/local/go
 COPY --from=uv /uv /uvx /usr/local/bin/
 ENV PATH="/usr/local/go/bin:${PATH}"
+
+# 内置 chsrc（全平台换源工具）：运行时由 entrypoint 按容器实际网络测速，自动挑最快镜像。
+# 版本固定，升级改 CHSRC_VERSION；GitHub 拉不到时回退 Gitee（国内构建更稳）。
+ARG CHSRC_VERSION=v0.2.7
+ARG TARGETARCH=amd64
+RUN set -eux; \
+    case "${TARGETARCH}" in \
+      amd64) chsrc_arch=x64 ;; \
+      arm64) chsrc_arch=aarch64 ;; \
+      arm)   chsrc_arch=armv7 ;; \
+      riscv64) chsrc_arch=riscv64 ;; \
+      *) echo "chsrc: 不支持的架构 ${TARGETARCH}" >&2; exit 1 ;; \
+    esac; \
+    if ! curl -fsSL "https://github.com/RubyMetric/chsrc/releases/download/${CHSRC_VERSION}/chsrc-${chsrc_arch}-linux" -o /usr/local/bin/chsrc; then \
+      curl -fsSL "https://gitee.com/RubyMetric/chsrc/releases/download/${CHSRC_VERSION}/chsrc-${chsrc_arch}-linux" -o /usr/local/bin/chsrc; \
+    fi; \
+    chmod +x /usr/local/bin/chsrc; \
+    chsrc --version
 
 # 先升级 npm：node:24 自带的 npm 11 捆了 undici 6.28.0 / brace-expansion 5.0.9（HIGH CVE），npm 12 已修复
 # pnpm 预装进镜像，容器内开箱即用
@@ -49,14 +60,6 @@ RUN set -eux; \
     rm -rf "$target/undici"; \
     mv package "$target/undici"; \
     cd /; rm -rf "$tmp"
-
-# 容器内开发默认走国内镜像源（npm/pnpm → 淘宝，Go → 七牛，pip/uv → 清华）。
-# 放在安装步骤之后：这些只影响运行时默认值，构建期安装 dsh/undici 等仍走官方源；
-# 想换源/回官方源，在 compose 的 environment 里覆盖对应变量即可。
-ENV NPM_CONFIG_REGISTRY=https://registry.npmmirror.com \
-    GOPROXY=https://goproxy.cn,direct \
-    PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple \
-    UV_DEFAULT_INDEX=https://pypi.tuna.tsinghua.edu.cn/simple
 
 ENV DSH_HOME=/data/dsh-home
 WORKDIR /data/workspace

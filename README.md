@@ -54,8 +54,7 @@ Tailscale 用你自己已有的容器，本仓库只管 dsh 这一个容器。
 | 收紧 IP 白名单 | `.env` 里设 `ALLOWED_IPS`，例如 `ALLOWED_IPS=192.168.1.23 100.64.0.0/10` |
 | 过 dsh 自己那层认证 | `.env` 里设 `DSH_TRUSTED_HOSTS`（浏览器地址栏里的主机名/IP，空格分隔），并设 `DSH_PUBLIC_URL=http://<NAS局域网IP>:8443` 让启动日志直接打印可点开的带 token 地址 |
 | 只绑指定网卡 | compose 里 ports 改成 `"<NAS局域网IP>:8443:8443"` |
-| 换镜像源/回官方源 | compose 的 `environment:` 里覆盖对应变量：`NPM_CONFIG_REGISTRY`（npm/pnpm）、`GOPROXY`（go）、`PIP_INDEX_URL`（pip）、`UV_DEFAULT_INDEX`（uv）；官方源分别为 `https://registry.npmjs.org`、`https://proxy.golang.org,direct`、`https://pypi.org/simple`、`https://pypi.org/simple` |
-| 换系统包（apt）源 | 默认清华 `mirrors.tuna.tsinghua.edu.cn`，构建期与容器内运行时都生效；构建时 `--build-arg APT_MIRROR=mirrors.aliyun.com`（或 `mirrors.ustc.edu.cn`、官方 `deb.debian.org`）即可切换 |
+| 换镜像源/回官方源 | 镜像内置 [chsrc](https://github.com/RubyMetric/chsrc)：容器启动时后台按实际网络测速，自动为 apt / npm / pnpm / pip / uv / go 选最快国内镜像；手动重测 `docker exec -it dsh chsrc set <dish>`，回官方源 `docker exec -it dsh chsrc reset <dish>`，日志 `/var/log/chsrc.log` |
 | 缓存持久化 | 解开 compose 里 `go-cache` / `uv` 两行注释 |
 
 NAS 上的目录结构（挂载均为 compose 相对路径，相对 docker-compose.yml 所在目录）：
@@ -99,7 +98,7 @@ docker compose pull && docker compose up -d
 | Debian 底座 | 12 bookworm | 2028 |
 | dsh / uv / Caddy / pnpm | 跟随上游 | 每周重建自动跟进 |
 
-镜像已内置国内镜像源默认值：系统包 `apt-get` → 清华 TUNA（构建期和容器内运行时都走这个源），容器内 `npm`/`pnpm` → 淘宝 npmmirror，`go get` → 七牛 goproxy.cn，`pip`/`uv` → 清华 PyPI；换源见「可选配置」。
+镜像内置 [chsrc](https://github.com/RubyMetric/chsrc)（v0.2.7）：容器启动时在后台按实际网络测速，自动把 apt / npm / pnpm / pip / uv / go 换到最快的国内镜像，不写死任何源，换网络环境无需改配置，详情见容器内 `/var/log/chsrc.log`。chsrc 为 GPL-3.0 软件，随镜像分发需遵守其许可证。
 
 ## 排障
 
