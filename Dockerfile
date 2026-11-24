@@ -8,7 +8,15 @@ FROM ghcr.io/astral-sh/uv:latest AS uv
 
 FROM node:24-bookworm-slim
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# apt 默认走清华镜像（--build-arg APT_MIRROR=deb.debian.org 可切回官方源）。
+# 改的是镜像里的 sources.list，所以容器内运行时 apt-get 也走同一个源。
+ARG APT_MIRROR=mirrors.tuna.tsinghua.edu.cn
+RUN set -eux; \
+    for f in /etc/apt/sources.list /etc/apt/sources.list.d/*.sources; do \
+      [ -f "$f" ] || continue; \
+      sed -i "s|deb.debian.org|${APT_MIRROR}|g; s|security.debian.org|${APT_MIRROR}|g" "$f"; \
+    done; \
+    apt-get update && apt-get install -y --no-install-recommends \
       tini \
       git \
       openssh-client \
@@ -43,7 +51,7 @@ RUN set -eux; \
     cd /; rm -rf "$tmp"
 
 # 容器内开发默认走国内镜像源（npm/pnpm → 淘宝，Go → 七牛，pip/uv → 清华）。
-# 放在安装步骤之后：构建期仍走官方源（CI 上更稳），只影响运行时默认值；
+# 放在安装步骤之后：这些只影响运行时默认值，构建期安装 dsh/undici 等仍走官方源；
 # 想换源/回官方源，在 compose 的 environment 里覆盖对应变量即可。
 ENV NPM_CONFIG_REGISTRY=https://registry.npmmirror.com \
     GOPROXY=https://goproxy.cn,direct \
