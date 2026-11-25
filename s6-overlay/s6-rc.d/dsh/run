@@ -2,6 +2,10 @@
 # dsh 长驻服务。软件级重启：docker exec dsh s6-svc -r /run/service/dsh
 # （s6 会自动以新 token 重新拉起，Caddy 全程不受影响）
 set -e
+# s6-setuidgid 只换 uid/gid、不改环境：进程仍带着 runc 给 root 的 HOME=/root，而 /root
+# 是 700 root:root——降权后 node/npm/pnpm 一读 $HOME 就 Permission denied（装插件即栽在这）。
+# HOME 指到持久卷：子进程的配置与缓存（.npm/.config/.cache）也随卷持久化
+export HOME="${DSH_HOME:-/data/dsh-home}"
 mkdir -p "${DSH_HOME:-/data/dsh-home}"
 
 # dsh web 自身还有一层浏览器认证：启动时打印带一次性 token 的 URL，浏览器首次访问

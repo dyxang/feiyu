@@ -2,11 +2,13 @@ name: build-image
 
 on:
   # 临时改为仅手动触发：近期改动频繁，避免每次 push 都跑构建。
-  # 稳定后把下面 push / schedule 两段注释解开即可恢复自动构建（每周一 03:23 UTC）。
+  # 稳定后把下面 push / schedule 两段注释解开即可恢复（每周一 03:23 UTC）。
+  # 注意：push 只会跑 check / smoke 两个体检 job（publish 有事件门控，不推镜像）；
+  #       schedule 走完整流水线并发布，跟进 @deepseek-ai/dsh 与基础镜像补丁。
   # push:
   #   branches: [main]
   # schedule:
-  #   - cron: "23 3 * * 1" # 每周一自动重建，跟进 @deepseek-ai/dsh 与基础镜像补丁
+  #   - cron: "23 3 * * 1"
   workflow_dispatch:
 
 permissions:
@@ -14,8 +16,110 @@ permissions:
   packages: write
 
 jobs:
-  build:
+  # ---- 体检第一层：静态检查，不构建镜像 ----
+  check:
+    name: 静态检查
     runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # s6-rc-compile 编译整个服务树：up 文件被当 execline 解析，写错会在这一步
+      # 编译期就暴露（此前那次启动崩溃正是这类错误）
+      - name: s6-rc 编译服务树
+        run: |
+          S6_VERSION="$(sed -n 's/^ARG S6_OVERLAY_VERSION=//p' Dockerfile)"
+          [ -n "${S6_VERSION}" ] || { echo "::error::Dockerfile 缺少 S6_OVERLAY_VERSION"; exit 1; }
+          mkdir -p /tmp/s6root
+          base="https://github.com/just-containers/s6-overlay/releases/download/v${S6_VERSION}"
+          curl -fsSL "${base}/s6-overlay-noarch.tar.xz" | tar -C /tmp/s6root -Jx
+          curl -fsSL "${base}/s6-overlay-x86_64.tar.xz" | tar -C /tmp/s6root -Jx
+          # 与镜像内布局同构：仓库定义覆盖官方 noarch 骨架（user2 等来自骨架）
+          cp -a s6-overlay/. /tmp/s6root/etc/s6-overlay/
+          rm -rf /tmp/compiled
+          /tmp/s6root/command/s6-rc-compile /tmp/compiled /tmp/s6root/etc/s6-overlay/s6-rc.d
+          echo "服务树编译通过"
+
+      # uv:latest / apt npm 不锁版本 / RUN 内 cd 是刻意选择（warning 级），
+      # 阈值设在 error：真错误才阻断，warning 仍打印在日志里供人工看
+      - name: hadolint Dockerfile
+        run: |
+          curl -fsSL https://github.com/hadolint/hadolint/releases/download/v2.12.0/hadolint-Linux-x86_64 -o hadolint
+          chmod +x hadolint
+          ./hadolint --failure-threshold error Dockerfile
+
+      # -s sh：脚本的 shebang 是 /command/with-contenv sh，shellcheck 不认识这个解释器路径
+      - name: shellcheck 服务脚本
+        run: |
+          shellcheck -s sh s6-overlay/scripts/*.sh s6-overlay/s6-rc.d/*/run
+
+  # ---- 体检第二层：冒烟测试。构建通过 ≠ 能跑，把容器真的跑起来才算数 ----
+  smoke:
+    name: 冒烟测试
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: docker/setup-buildx-action@v4
+
+      - name: 构建镜像（仅本地，不推送）
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/amd64
+          push: false
+          load: true
+          tags: dsh-harness:smoke
+          build-args: |
+            CHSRC_REFRESH=${{ github.run_id }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # 参数与 docker-compose.yml 对齐（PUID/PGID/端口/卷/no-new-privileges）
+      - name: 启动容器
+        run: |
+          mkdir -p codespace data/dsh-home
+          docker run -d --name dsh \
+            -p 8443:8443 \
+            -e PUID=1000 -e PGID=1000 -e DSH_PORT=3080 \
+            -v "$PWD/codespace:/data/workspace" \
+            -v "$PWD/data/dsh-home:/data/dsh-home" \
+            --security-opt no-new-privileges \
+            dsh-harness:smoke
+
+      - name: 等待就绪（判据与镜像 HEALTHCHECK 一致：非 502/503 响应）
+        run: |
+          code="000"
+          for i in $(seq 1 60); do
+            code="$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8443/ || true)"
+            if [ -n "${code}" ] && [ "${code}" != "000" ] && [ "${code}" != "502" ] && [ "${code}" != "503" ]; then
+              echo "服务就绪：HTTP ${code}（第 ${i} 次探测）"
+              test -f data/dsh-home/INITIAL_PASSWORD.txt \
+                && echo "入口密码文件已生成" \
+                || { echo "::error::服务已应答但未生成 INITIAL_PASSWORD.txt"; exit 1; }
+              exit 0
+            fi
+            sleep 2
+          done
+          docker logs dsh 2>&1 | tail -80
+          echo "::error::120 秒内服务未就绪（最后 HTTP ${code}）"
+          exit 1
+
+      # 上次翻车（unterminated block）日志里就有 fatal——直接盯日志兜底
+      - name: 启动日志审查
+        if: always()
+        run: |
+          docker logs dsh 2>&1 | tee /tmp/dsh.log
+          if grep -E 'fatal:|unterminated block|unable to exec' /tmp/dsh.log; then
+            echo "::error::启动日志包含致命错误"
+            exit 1
+          fi
+
+  # ---- 发布：体检全绿才推 GHCR（layer 缓存自 smoke，这里基本秒构建） ----
+  publish:
+    name: 构建并推送 GHCR
+    needs: [check, smoke]
+    if: github.event_name != 'push' # push 事件只体检不发布；手动 / schedule 才发布
     outputs:
       digest: ${{ steps.build.outputs.digest }}
     steps:
@@ -58,7 +162,7 @@ jobs:
           cache-to: type=gha,mode=max
 
   scan:
-    needs: build
+    needs: publish
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7 # .trivyignore 需要随仓库检出
@@ -73,7 +177,7 @@ jobs:
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           # 按 digest 精确扫描本次构建产物，避免 latest tag 尚未就绪的竞态
-          image-ref: ghcr.io/${{ github.repository }}@${{ needs.build.outputs.digest }}
+          image-ref: ghcr.io/${{ github.repository }}@${{ needs.publish.outputs.digest }}
           scanners: vuln
           severity: HIGH,CRITICAL
           ignore-unfixed: true
@@ -81,7 +185,7 @@ jobs:
 
   cleanup:
     needs: scan
-    if: always() # 扫描失败也不影响清理孤儿版本
+    if: always() && github.event_name != 'push' # 扫描失败也不影响清理孤儿版本
     runs-on: ubuntu-latest
     permissions:
       contents: read
