@@ -16,6 +16,10 @@
 #
 # 之后：CI 每周一自动重建镜像（底座安全补丁 + dsh 新版），
 #      NAS 上 docker compose pull && docker compose up -d 即完成更新。
+# 常用软件级操作（s6 托管，容器不退、互不影响）：
+#      只重启 dsh       docker exec dsh s6-svc -r /run/service/dsh
+#      停 / 启 dsh      docker exec dsh s6-svc -d /run/service/dsh（-u 启动）
+#      重载 Caddy 配置  docker exec dsh caddy reload --config /etc/caddy/Caddyfile
 # 安全：入口三层 = 来源 IP 白名单（默认内网 + Tailscale 网段）→ basic auth
 #      → dsh 只绑容器内 127.0.0.1；公网无端口映射。
 # ============================================================================
@@ -31,6 +35,8 @@ services:
       - DSH_PORT=3080
       - DSH_TRUSTED_HOSTS=${DSH_TRUSTED_HOSTS:-}  # 外部访问必填：浏览器地址栏里的主机名/IP（空格分隔多个），否则页面能开但 API 全 403
       - DSH_PUBLIC_URL=${DSH_PUBLIC_URL:-}        # 可选，需 dsh ≥0.2.3-alpha.2（老版本自动忽略并打 WARNING）：对外根 URL，让日志直接打印可点开的带 token 地址
+      - PUID=${PUID:-1000}              # 非 root 运行 uid；NAS 上 id <你的用户名> 查询，PUID=0 回退 root
+      - PGID=${PGID:-1000}              # 同上，gid
     # 可选：想自己定密码且不让它出现在 docker inspect / .env 里，用文件 secret（最安全的自定方式）：
     #   echo '你的密码' > ./data/dsh-password && chmod 600 ./data/dsh-password
     #   然后解开下一行注释，以及文件末尾的 secrets: 定义
@@ -42,4 +48,12 @@ services:
       # 可选：缓存持久化（避免重建容器后重新下载依赖）
       # - ./data/go-cache:/root/go               # Go 模块缓存
       # - ./data/uv:/root/.local/share/uv        # uv 下载的 Python 版本
+    security_opt:
+      - no-new-privileges
+    # 限制 docker 日志体积：dsh 的 stdout 走 json-file 驱动，不限会在 NAS 上慢慢吃满磁盘
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     restart: unless-stopped
