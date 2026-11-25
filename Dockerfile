@@ -1,11 +1,5 @@
-# DeepSeek Harness (dsh) + Caddy + Node.js + Python + Go + uv
+# DeepSeek Harness (dsh) + Caddy + Node.js + Python + uv
 FROM caddy:2 AS caddy
-
-# Go 1.26.x：1.25 的 stdlib 存在 HIGH CVE（crypto/tls、crypto/x509、net/http），需 ≥1.26.10
-FROM golang:1.26-bookworm AS golang
-# 瘦身：在本 stage 删掉运行时用不到的文档/测试/API 兼容表，
-# COPY 进最终镜像的体积才真正变小（跨层删除不会回收下层空间）
-RUN rm -rf /usr/local/go/doc /usr/local/go/test /usr/local/go/api
 
 FROM ghcr.io/astral-sh/uv:latest AS uv
 
@@ -55,9 +49,8 @@ RUN set -eux; \
     rm -rf /tmp/s6-overlay-*
 
 COPY --from=caddy /usr/bin/caddy /usr/bin/caddy
-COPY --from=golang /usr/local/go /usr/local/go
 COPY --from=uv /uv /uvx /usr/local/bin/
-ENV PATH="/usr/local/go/bin:${PATH}"
+# Go 工具链不进镜像（省 ~230MB）：需要时自行安装；装在卷里才能在容器重建后保留
 
 # 先升级 npm：node:24 自带的 npm 11 捆了 undici 6.28.0 / brace-expansion 5.0.9（HIGH CVE），npm 12 已修复
 # pnpm 预装进镜像，容器内开箱即用；三个 dsh 子包把 undici 精确锁死在 8.11.2（HIGH CVE 需 8.12.2），
