@@ -13,7 +13,9 @@ ARG S6_OVERLAY_VERSION=3.2.1.0
 
 # 构建期 apt 走官方源（CI 在境外，走国内源反而慢）；运行时的换源交给内置的 chsrc。
 # xz-utils 用于解压 s6-overlay；tini 已移除——1 号进程交给 s6 的 /init，
-# 职责更全：信号转发 + 僵尸回收 + 各服务崩溃自动拉起
+# 职责更全：信号转发 + 僵尸回收 + 各服务崩溃自动拉起。
+# 顺带删除基础镜像自带的 node 用户：它占 uid=1000 且排在 /etc/passwd 前面，
+# user-setup 以 -o 建的同 uid app 会被 getpwuid 首匹配盖住（whoami 显示成 node）
 RUN apt-get update && apt-get install -y --no-install-recommends \
       xz-utils \
       git \
@@ -23,7 +25,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       python3 \
       python3-venv \
       python3-pip \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && (userdel -r node 2>/dev/null || true) \
+    && (groupdel node 2>/dev/null || true)
 
 # s6-overlay：caddy / dsh / chsrc-mirror 三个服务由它托管（服务定义在仓库 s6-overlay/ 目录）。
 # 好处：崩溃自动拉起（带退避限速）、docker stop 按依赖优雅停机、软件级重启——

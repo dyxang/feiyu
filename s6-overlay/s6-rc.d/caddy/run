@@ -2,6 +2,9 @@
 # Caddy 长驻服务。s6 各服务进程环境互相隔离，
 # 所以入口密码与 IP 白名单默认值都在本服务脚本内自足。
 set -e
+# 同 dsh/run：降权后 HOME 不能留在 /root（700 root:root，app 不可读写），
+# 否则 caddy 的存储/XDG 目录（默认 $HOME/.local/...）会踩 Permission denied
+export HOME="${DSH_HOME:-/data/dsh-home}"
 mkdir -p "${DSH_HOME:-/data/dsh-home}"
 
 # basic auth 优先级：CADDY_HASH（bcrypt）> 文件 secret /run/secrets/dsh_password

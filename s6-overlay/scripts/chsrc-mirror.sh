@@ -9,8 +9,10 @@ if ! command -v chsrc >/dev/null 2>&1; then
 fi
 echo "chsrc: 后台按实际网络测速换源中，详情 /var/log/chsrc.log"
 (
+  # 用户级换源配置按 $HOME 落盘（pip/uv/npm/pnpm）；写进 /root 的话 app（uid!=0）读不到，
+  # 换源形同虚设。debian 走系统 /etc/apt，不受影响
   for d in debian npm pnpm pip uv go; do
-    timeout 60 chsrc set "${d}" || true
+    HOME="${DSH_HOME:-/data/dsh-home}" timeout 60 chsrc set "${d}" || true
   done
 ) >>/var/log/chsrc.log 2>&1 &
 exit 0
