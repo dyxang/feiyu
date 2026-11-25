@@ -1,14 +1,4 @@
-#!/command/with-contenv sh
-# oneshot：把换源丢到后台后立即退出，s6 不等待它，也不会杀掉它的子进程。
-# 内置 chsrc：启动时按容器实际网络测速，把 apt/npm/pnpm/pip/uv/go 换到最快国内镜像。
-# 手动重测：docker exec -it dsh chsrc set <dish>；回官方源：chsrc reset <dish>
-if ! command -v chsrc >/dev/null 2>&1; then
-  exit 0
-fi
-echo "chsrc: 后台按实际网络测速换源中，详情 /var/log/chsrc.log"
-(
-  for d in debian npm pnpm pip uv go; do
-    timeout 60 chsrc set "${d}" || true
-  done
-) >>/var/log/chsrc.log 2>&1 &
-exit 0
+# oneshot。注意：s6-rc 会用 execline 解析器编译本文件（#! 与 # 开头的行都按注释跳过），
+# 不能直接写 shell 语句——换源逻辑在 /etc/s6-overlay/scripts/chsrc-mirror.sh。
+# foreground 包装：换源是尽力而为，脚本失败不影响本 oneshot（它也没有依赖方）。
+foreground { /etc/s6-overlay/scripts/chsrc-mirror.sh }

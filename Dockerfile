@@ -1,11 +1,5 @@
-# DeepSeek Harness (dsh) + Caddy + Node.js + Python + Go + uv
+# DeepSeek Harness (dsh) + Caddy + Node.js + Python + uv
 FROM caddy:2 AS caddy
-
-# Go 1.26.x：1.25 的 stdlib 存在 HIGH CVE（crypto/tls、crypto/x509、net/http），需 ≥1.26.10
-FROM golang:1.26-bookworm AS golang
-# 瘦身：在本 stage 删掉运行时用不到的文档/测试/API 兼容表，
-# COPY 进最终镜像的体积才真正变小（跨层删除不会回收下层空间）
-RUN rm -rf /usr/local/go/doc /usr/local/go/test /usr/local/go/api
 
 FROM ghcr.io/astral-sh/uv:latest AS uv
 
@@ -55,14 +49,13 @@ RUN set -eux; \
     rm -rf /tmp/s6-overlay-*
 
 COPY --from=caddy /usr/bin/caddy /usr/bin/caddy
-COPY --from=golang /usr/local/go /usr/local/go
 COPY --from=uv /uv /uvx /usr/local/bin/
-ENV PATH="/usr/local/go/bin:${PATH}"
 
 # 先升级 npm：node:24 自带的 npm 11 捆了 undici 6.28.0 / brace-expansion 5.0.9（HIGH CVE），npm 12 已修复
 # pnpm 预装进镜像，容器内开箱即用；三个 dsh 子包把 undici 精确锁死在 8.11.2（HIGH CVE 需 8.12.2），
 # 精确版本无法用 overrides 修正，直接用 npm 官方 tarball 替换 dsh 下那份副本
 # （与安装放在同一层：跨层删除不会回收下层空间，旧副本会以死重形式留在镜像里）
+# /root/.npm 是本轮全部下载 tarball 的缓存（npm/pnpm/dsh/undici），装完即死重，同层清掉
 RUN set -eux; \
     npm install -g npm@latest; \
     npm install -g pnpm; \
@@ -74,7 +67,7 @@ RUN set -eux; \
     target="$(npm root -g)/@deepseek-ai/dsh/node_modules"; \
     rm -rf "$target/undici"; \
     mv package "$target/undici"; \
-    cd /; rm -rf "$tmp"
+    cd /; rm -rf "$tmp" /root/.npm
 
 # PUID/PGID：容器内进程以此身份运行（非 root），默认 1000；NAS 上用 id <用户名> 查询，
 # 设 PUID=0 保持 root 兼容旧行为。user-setup 服务会在启动时按这两个值准备用户与目录所有权
