@@ -16,6 +16,10 @@
 #
 # 之后：CI 每周一自动重建镜像（底座安全补丁 + dsh 新版），
 #      NAS 上 docker compose pull && docker compose up -d 即完成更新。
+# 常用软件级操作（s6 托管，容器不退、互不影响）：
+#      只重启 dsh       docker exec dsh s6-svc -r /run/service/dsh
+#      停 / 启 dsh      docker exec dsh s6-svc -d /run/service/dsh（-u 启动）
+#      重载 Caddy 配置  docker exec dsh caddy reload --config /etc/caddy/Caddyfile
 # 安全：入口三层 = 来源 IP 白名单（默认内网 + Tailscale 网段）→ basic auth
 #      → dsh 只绑容器内 127.0.0.1；公网无端口映射。
 # ============================================================================
