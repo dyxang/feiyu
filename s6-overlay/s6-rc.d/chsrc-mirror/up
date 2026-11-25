@@ -1,4 +1,5 @@
 # oneshot。注意：s6-rc 会用 execline 解析器编译本文件（#! 与 # 开头的行都按注释跳过），
 # 不能直接写 shell 语句——换源逻辑在 /etc/s6-overlay/scripts/chsrc-mirror.sh。
 # foreground 包装：换源是尽力而为，脚本失败不影响本 oneshot（它也没有依赖方）。
+# 依赖 user-setup（dependencies.d/user-setup）：脚本要以 app 身份写 $HOME 下的换源配置。
 foreground { /etc/s6-overlay/scripts/chsrc-mirror.sh }
