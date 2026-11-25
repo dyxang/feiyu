@@ -85,7 +85,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      packages: delete
+      packages: write
     steps:
       - name: 删除 GHCR 未打 tag 的历史版本
         uses: dataaxiom/ghcr-cleanup-action@v1
