@@ -25,5 +25,10 @@ if [ -n "${DSH_PUBLIC_URL:-}" ]; then
   esac
 fi
 
+# 非 root 运行（app 用户由 user-setup 服务按 PUID/PGID 准备）；PUID=0 保持 root
+if [ "${PUID:-1000}" != "0" ]; then
+  # shellcheck disable=SC2086
+  exec s6-setuidgid app dsh web --port "${DSH_PORT:-3080}" ${DSH_ARGS}
+fi
 # shellcheck disable=SC2086
 exec dsh web --port "${DSH_PORT:-3080}" ${DSH_ARGS}

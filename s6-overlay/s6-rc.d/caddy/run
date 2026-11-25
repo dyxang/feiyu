@@ -36,4 +36,10 @@ fi
 export ALLOWED_IPS
 
 mkdir -p /var/log/caddy
+# 非 root 运行：日志目录接管所有权后以 app 用户启动（app 由 user-setup 服务按 PUID/PGID 准备，
+# HOME 指向 dsh-home，Caddy 的数据/配置缓存落在持久卷里）；PUID=0 保持 root
+if [ "${PUID:-1000}" != "0" ]; then
+  chown -R "${PUID:-1000}:${PGID:-1000}" /var/log/caddy
+  exec s6-setuidgid app caddy run --config /etc/caddy/Caddyfile --adapter caddyfile
+fi
 exec caddy run --config /etc/caddy/Caddyfile --adapter caddyfile

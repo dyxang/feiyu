@@ -57,6 +57,7 @@ Tailscale 用你自己已有的容器，本仓库只管 dsh 这一个容器。
 | 只绑指定网卡 | compose 里 ports 改成 `"<NAS局域网IP>:8443:8443"` |
 | 换镜像源/回官方源 | 镜像内置 [chsrc](https://github.com/RubyMetric/chsrc)：容器启动时后台按实际网络测速，自动为 apt / npm / pnpm / pip / uv / go 选最快国内镜像；手动重测 `docker exec -it dsh chsrc set <dish>`，回官方源 `docker exec -it dsh chsrc reset <dish>`，日志 `/var/log/chsrc.log` |
 | 只重启 dsh / 重载 Caddy（容器不动） | `docker exec dsh s6-svc -r /run/service/dsh`（token 会换新，重新从日志取）；改了 Caddyfile 后 `docker exec dsh caddy reload --config /etc/caddy/Caddyfile` |
+| 非 root 运行（默认启用） | dsh/Caddy 以 `PUID`/`PGID`（默认 1000）运行，不要用 compose 的 `user:` 改；NAS 上 `id <你的用户名>` 查 uid/gid 后在 `.env` 设置，`PUID=0` 回退 root。首次启动自动接管 `data/dsh-home` 所有权，`codespace/` 只接管顶层（大目录不递归，属主不对时请自行 chown） |
 | 缓存持久化 | 解开 compose 里 `go-cache` / `uv` 两行注释 |
 
 NAS 上的目录结构（挂载均为 compose 相对路径，相对 docker-compose.yml 所在目录）：

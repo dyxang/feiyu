@@ -3,6 +3,9 @@ FROM caddy:2 AS caddy
 
 # Go 1.26.x：1.25 的 stdlib 存在 HIGH CVE（crypto/tls、crypto/x509、net/http），需 ≥1.26.10
 FROM golang:1.26-bookworm AS golang
+# 瘦身：在本 stage 删掉运行时用不到的文档/测试/API 兼容表，
+# COPY 进最终镜像的体积才真正变小（跨层删除不会回收下层空间）
+RUN rm -rf /usr/local/go/doc /usr/local/go/test /usr/local/go/api
 
 FROM ghcr.io/astral-sh/uv:latest AS uv
 
@@ -73,7 +76,11 @@ RUN set -eux; \
     mv package "$target/undici"; \
     cd /; rm -rf "$tmp"
 
-ENV DSH_HOME=/data/dsh-home
+# PUID/PGID：容器内进程以此身份运行（非 root），默认 1000；NAS 上用 id <用户名> 查询，
+# 设 PUID=0 保持 root 兼容旧行为。user-setup 服务会在启动时按这两个值准备用户与目录所有权
+ENV PUID=1000 \
+    PGID=1000 \
+    DSH_HOME=/data/dsh-home
 WORKDIR /data/workspace
 
 # 内置 chsrc（换源工具）：默认跟随 GitHub 最新正式版；CHSRC_VERSION 可固定版本。
@@ -109,9 +116,10 @@ COPY --chmod=0755 s6-overlay/ /etc/s6-overlay/
 # 仅 Caddy 对外；dsh 只绑容器内 127.0.0.1
 EXPOSE 8443
 
-# 任意 HTTP 响应（含 401）即视为存活
+# 存活 = 拿到非 502/503 的 HTTP 响应：dsh 崩溃时 Caddy 会回 502，不能再算"健康"；
+# Caddy 自身挂掉时 curl 直接失败（非零退出）→ 立即判不健康
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
-  CMD curl -s -o /dev/null http://127.0.0.1:8443/ || exit 1
+  CMD code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8443/) || exit 1; [ "$code" != "502" ] && [ "$code" != "503" ]
 
 # s6-overlay 的 /init 作为 1 号进程：启动时编译服务库、按依赖顺序启停、
 # 把 docker stop 的 SIGTERM 转发给每个服务并回收僵尸进程
