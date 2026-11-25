@@ -119,6 +119,7 @@ jobs:
   publish:
     name: 构建并推送 GHCR
     needs: [check, smoke]
+    runs-on: ubuntu-latest
     if: github.event_name != 'push' # push 事件只体检不发布；手动 / schedule 才发布
     outputs:
       digest: ${{ steps.build.outputs.digest }}
