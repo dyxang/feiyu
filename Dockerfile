@@ -63,6 +63,7 @@ ENV PATH="/usr/local/go/bin:${PATH}"
 # pnpm 预装进镜像，容器内开箱即用；三个 dsh 子包把 undici 精确锁死在 8.11.2（HIGH CVE 需 8.12.2），
 # 精确版本无法用 overrides 修正，直接用 npm 官方 tarball 替换 dsh 下那份副本
 # （与安装放在同一层：跨层删除不会回收下层空间，旧副本会以死重形式留在镜像里）
+# /root/.npm 是本轮全部下载 tarball 的缓存（npm/pnpm/dsh/undici），装完即死重，同层清掉
 RUN set -eux; \
     npm install -g npm@latest; \
     npm install -g pnpm; \
@@ -74,7 +75,7 @@ RUN set -eux; \
     target="$(npm root -g)/@deepseek-ai/dsh/node_modules"; \
     rm -rf "$target/undici"; \
     mv package "$target/undici"; \
-    cd /; rm -rf "$tmp"
+    cd /; rm -rf "$tmp" /root/.npm
 
 # PUID/PGID：容器内进程以此身份运行（非 root），默认 1000；NAS 上用 id <用户名> 查询，
 # 设 PUID=0 保持 root 兼容旧行为。user-setup 服务会在启动时按这两个值准备用户与目录所有权
