@@ -50,7 +50,6 @@ RUN set -eux; \
 
 COPY --from=caddy /usr/bin/caddy /usr/bin/caddy
 COPY --from=uv /uv /uvx /usr/local/bin/
-# Go 工具链不进镜像（省 ~230MB）：需要时自行安装；装在卷里才能在容器重建后保留
 
 # 先升级 npm：node:24 自带的 npm 11 捆了 undici 6.28.0 / brace-expansion 5.0.9（HIGH CVE），npm 12 已修复
 # pnpm 预装进镜像，容器内开箱即用；三个 dsh 子包把 undici 精确锁死在 8.11.2（HIGH CVE 需 8.12.2），
