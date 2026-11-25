@@ -46,6 +46,9 @@ jobs:
           context: .
           platforms: linux/amd64 # 默认只构建 amd64；NAS 是 ARM 时改成 linux/amd64,linux/arm64
           push: true
+          # 关闭 provenance 证明：否则每次推送会多出一个未打 tag 的 attestation manifest，
+          # 把 GHCR Versions 页面刷出一堆 sha256:... 条目
+          provenance: false
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           # 每周重建时刷新内置 chsrc 到最新正式版（否则该层会被构建缓存命中）
@@ -75,3 +78,17 @@ jobs:
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           exit-code: "1"
+
+  cleanup:
+    needs: scan
+    if: always() # 扫描失败也不影响清理孤儿版本
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: delete
+    steps:
+      - name: 删除 GHCR 未打 tag 的历史版本
+        uses: dataaxiom/ghcr-cleanup-action@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          delete-untagged: true # 只删未被任何 tag 引用的 manifest，latest/main/sha-xxx 不受影响
