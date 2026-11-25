@@ -23,6 +23,7 @@ Tailscale 用你自己已有的容器，本仓库只管 dsh 这一个容器。
 
 - `dsh web` 只绑容器内 `127.0.0.1`，Caddy 是唯一入口
 - 白名单默认放行内网网段 + Tailscale 网段（100.64.0.0/10）+ 回环，见下文「安全分层」
+- 容器内进程由 s6-overlay 托管：Caddy / dsh 崩溃自动拉起，支持软件级重启（`docker exec dsh s6-svc -r /run/service/dsh`）
 
 ## 使用
 
@@ -55,6 +56,8 @@ Tailscale 用你自己已有的容器，本仓库只管 dsh 这一个容器。
 | 过 dsh 自己那层认证 | `.env` 里设 `DSH_TRUSTED_HOSTS`（浏览器地址栏里的主机名/IP，空格分隔），并设 `DSH_PUBLIC_URL=http://<NAS局域网IP>:8443` 让启动日志直接打印可点开的带 token 地址 |
 | 只绑指定网卡 | compose 里 ports 改成 `"<NAS局域网IP>:8443:8443"` |
 | 换镜像源/回官方源 | 镜像内置 [chsrc](https://github.com/RubyMetric/chsrc)：容器启动时后台按实际网络测速，自动为 apt / npm / pnpm / pip / uv / go 选最快国内镜像；手动重测 `docker exec -it dsh chsrc set <dish>`，回官方源 `docker exec -it dsh chsrc reset <dish>`，日志 `/var/log/chsrc.log` |
+| 只重启 dsh / 重载 Caddy（容器不动） | `docker exec dsh s6-svc -r /run/service/dsh`（token 会换新，重新从日志取）；改了 Caddyfile 后 `docker exec dsh caddy reload --config /etc/caddy/Caddyfile` |
+| 非 root 运行（默认启用） | dsh/Caddy 以 `PUID`/`PGID`（默认 1000）运行，不要用 compose 的 `user:` 改；NAS 上 `id <你的用户名>` 查 uid/gid 后在 `.env` 设置，`PUID=0` 回退 root。首次启动自动接管 `data/dsh-home` 所有权，`codespace/` 只接管顶层（大目录不递归，属主不对时请自行 chown） |
 | 缓存持久化 | 解开 compose 里 `go-cache` / `uv` 两行注释 |
 
 NAS 上的目录结构（挂载均为 compose 相对路径，相对 docker-compose.yml 所在目录）：
@@ -105,7 +108,7 @@ docker compose pull && docker compose up -d
 - **403 Forbidden**：来源 IP 不在白名单。远程访问时先确认 Caddy 看到的来源 IP（`docker exec dsh grep '"status":403' /var/log/caddy/access.log*`，访问日志写容器内文件，不再混进 `docker logs`），必要时加进 `ALLOWED_IPS`
 - **401 进不去**：自动生成时密码在 `data/dsh-home/INITIAL_PASSWORD.txt`，或你 `.env` 里设置的密码；用户名固定为 `dsh`
 - **"dsh web authentication required; reopen the URL printed by dsh web"**：这是 `dsh web` 自己的浏览器认证（在 Caddy basic auth 之内还有一层），不是密码错了。它有两道门：
-  1. **Host 信任栅栏**：`dsh web` 只信任 loopback、绑定地址和 `--trusted-host` 点名的地址。你从浏览器经 Caddy 访问时 Host 是 NAS 地址，不在列表里——页面能开，但每个 API 调用都 403（如 `llm/listProviders failed: HTTP 403`）。解法：`.env` 设 `DSH_TRUSTED_HOSTS=192.168.1.23 100.101.102.103`（填你地址栏里实际用的主机名/IP，host 或 host:port，不带端口匹配任意端口，空格分隔多个），重建镜像并 `docker compose up -d`（entrypoint 会自动探测 dsh 版本并透传）。
+  1. **Host 信任栅栏**：`dsh web` 只信任 loopback、绑定地址和 `--trusted-host` 点名的地址。你从浏览器经 Caddy 访问时 Host 是 NAS 地址，不在列表里——页面能开，但每个 API 调用都 403（如 `llm/listProviders failed: HTTP 403`）。解法：`.env` 设 `DSH_TRUSTED_HOSTS=192.168.1.23 100.101.102.103`（填你地址栏里实际用的主机名/IP，host 或 host:port，不带端口匹配任意端口，空格分隔多个），重建镜像并 `docker compose up -d`（容器内 dsh 服务脚本会自动探测 dsh 版本并透传）。
   2. **一次性启动 token**：`dsh web` 每次启动都生成新 token 并打印在日志里，浏览器首次访问带 token 的 URL 会换取会话 cookie，之后正常访问。解法：`docker logs dsh | grep "dsh web:"` 找到打印的地址，把其中 `?token=...` 手工拼到你自己的外部地址后面打开一次。设了 `DSH_PUBLIC_URL`（需 dsh ≥0.2.3-alpha.2，当前 latest 0.2.2-rc.5 不支持、会被自动忽略）时，日志打印的就是可直接点开的外部地址。
   每次重启容器 token 都会变，若又出现这个提示，重新取一次日志里的地址即可。
 - **模型 401 / MISSING_CREDENTIAL**：Base URL 必须含 `/v1`；key 未被读到时检查 `.credentials.yaml` 权限与变量名是否和 `apiKeyEnv` 一致

@@ -7,5 +7,17 @@
       "matchManagers": ["github-actions"],
       "pinDigests": true
     }
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "fileMatch": ["(^|/)Dockerfile$"],
+      "matchStrings": [
+        "ARG S6_OVERLAY_VERSION=(?<currentValue>\\S+)"
+      ],
+      "datasourceTemplate": "github-releases",
+      "depNameTemplate": "just-containers/s6-overlay",
+      "versioningTemplate": "loose"
+    }
   ]
 }
