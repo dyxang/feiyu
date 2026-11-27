@@ -107,13 +107,6 @@ RUN set -eux; \
     mv package "$target/undici"; \
     cd /; rm -rf "$tmp" /root/.npm
 
-# PUID/PGID：容器内进程以此身份运行（非 root），默认 1000；NAS 上用 id <用户名> 查询，
-# 设 PUID=0 保持 root 兼容旧行为。user-setup 服务会在启动时按这两个值准备用户与目录所有权
-ENV PUID=1000 \
-    PGID=1000 \
-    DSH_HOME=/data/dsh-home
-WORKDIR /data/workspace
-
 # 内置 chsrc（换源工具）：默认跟随 GitHub 最新正式版；CHSRC_VERSION 可固定版本。
 # 放在 COPY 配置/服务脚本之前：配置或服务脚本改动不会触发重新下载 chsrc；
 # CHSRC_REFRESH 由 CI 每次重置，避免构建缓存复用旧包，又能让拉取失败只影响这一层。
@@ -140,6 +133,15 @@ RUN set -eux; \
     fi; \
     chmod +x /usr/local/bin/chsrc; \
     chsrc --version
+
+# 运行期参数（PUID/PGID/DSH_HOME）与 WORKDIR 放在末尾：这些是运行时才生效的元数据，
+# 调整默认值时不至于连带失效前面的大层（apt/npm/chsrc）。
+# PUID/PGID：容器内进程以此身份运行（非 root），默认 1000；NAS 上用 id <用户名> 查询，
+# 设 PUID=0 保持 root 兼容旧行为。user-setup 服务会在启动时按这两个值准备用户与目录所有权
+ENV PUID=1000 \
+    PGID=1000 \
+    DSH_HOME=/data/dsh-home
+WORKDIR /data/workspace
 
 COPY Caddyfile /etc/caddy/Caddyfile
 COPY --chmod=0755 s6-overlay/ /etc/s6-overlay/
