@@ -37,6 +37,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       tzdata \
     && rm -rf /var/lib/apt/lists/*
 
+# 安全：node:24-bookworm-slim 底座自带的 PAM 是 1.5.2-6+deb12u2，
+# 有 CVE-2025-6020（linux-pam 目录遍历，HIGH）。修复版 1.5.2-6+deb12u3 在 bookworm-security 源，
+# 定向升级这 4 个包即可（libpam-modules 依赖带入其余三个），不影响底座其他包、层增量极小。
+# apt-get update 后从 security 源取最新；残留索引同层清掉。
+RUN set -eux; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends --only-upgrade \
+      libpam0g libpam-modules libpam-modules-bin libpam-runtime; \
+    rm -rf /var/lib/apt/lists/*
+
 # P6（可选，默认关闭以控体积）：需要 C 编译栈时 --build-arg INSTALL_BUILD_TOOLS=1。
 # 日常 node/python + pnpm 装插件并不需要 gcc/make；apk-reverse、node-gyp 原生模块等再开。
 ARG INSTALL_BUILD_TOOLS=0
