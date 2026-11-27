@@ -29,3 +29,12 @@ fi
 chown -R "${PUID}:${PGID}" "${DSH_HOME_DIR}" 2>/dev/null || \
   echo "WARNING: chown ${DSH_HOME_DIR} 失败（NFS root_squash / 挂载只读？）；若服务因权限崩溃请检查宿主机目录所有权"
 chown "${PUID}:${PGID}" /data/workspace 2>/dev/null || true
+
+# P5：workspace 顶层已接管，但已存在的子目录（如 sandbox）可能仍是 root:root，
+# 导致 policy=workspace-write 也写不进（那是真实 unix 权限，非沙箱策略）。
+# 递归 chown 大仓库很慢，故只温和处理「属主明显不是本用户」的一层子目录。
+if [ -d /data/workspace ]; then
+  find /data/workspace -mindepth 1 -maxdepth 1 -not -user "${PUID}" \
+    -exec chown "${PUID}:${PGID}" {} + 2>/dev/null || \
+    echo "WARNING: 修正 /data/workspace 子目录属主失败；若工作区不可写请手动 chown -R ${PUID}:${PGID} /data/workspace"
+fi

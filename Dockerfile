@@ -14,16 +14,44 @@ ARG S6_OVERLAY_VERSION=3.2.1.0
 # 构建期 apt 走官方源（CI 在境外，走国内源反而慢）；运行时的换源交给内置的 chsrc。
 # xz-utils 用于解压 s6-overlay；tini 已移除——1 号进程交给 s6 的 /init，
 # 职责更全：信号转发 + 僵尸回收 + 各服务崩溃自动拉起
+# P6：裸 Debian slim 缺大量常规工具，脚本经常 command not found，这里补齐「小而高频」的一批。
+# wget 由 curl 覆盖故不单装；编译器（build-essential，约 250–350MB）单独做成可选层见下方。
 RUN apt-get update && apt-get install -y --no-install-recommends \
       xz-utils \
       git \
       openssh-client \
       ca-certificates \
       curl \
+      rsync \
+      jq \
+      unzip \
+      zip \
+      file \
+      xxd \
+      sqlite3 \
+      procps \
+      lsof \
       python3 \
       python3-venv \
       python3-pip \
+      tzdata \
     && rm -rf /var/lib/apt/lists/*
+
+# P6（可选，默认关闭以控体积）：需要 C 编译栈时 --build-arg INSTALL_BUILD_TOOLS=1。
+# 日常 node/python + pnpm 装插件并不需要 gcc/make；apk-reverse、node-gyp 原生模块等再开。
+ARG INSTALL_BUILD_TOOLS=0
+RUN set -eux; \
+    if [ "${INSTALL_BUILD_TOOLS}" = "1" ]; then \
+      apt-get update && apt-get install -y --no-install-recommends build-essential \
+        && rm -rf /var/lib/apt/lists/*; \
+    else \
+      echo "build-essential 未安装（INSTALL_BUILD_TOOLS=${INSTALL_BUILD_TOOLS}）；需要编译请 --build-arg INSTALL_BUILD_TOOLS=1 重建"; \
+    fi
+
+# P7：统一时区与 locale（避免 UTC / POSIX 导致的日志时间与 UTF-8 排序/编码差异，可按组织习惯改 TZ）
+ENV TZ=Asia/Shanghai \
+    LANG=C.UTF-8 \
+    LC_ALL=C.UTF-8
 
 # s6-overlay：caddy / dsh / chsrc-mirror 三个服务由它托管（服务定义在仓库 s6-overlay/ 目录）。
 # 好处：崩溃自动拉起（带退避限速）、docker stop 按依赖优雅停机、软件级重启——

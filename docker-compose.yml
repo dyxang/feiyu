@@ -46,10 +46,11 @@ services:
       - ./codespace:/data/workspace       # 代码持久化：dsh 工作区根目录（项目放这里）
       - ./data/dsh-home:/data/dsh-home    # 数据持久化：配置/凭据/INITIAL_PASSWORD.txt
       # 可选：缓存持久化（避免重建容器后重新下载依赖）
-      # - ./data/go-cache:/root/go               # Go 模块缓存
       # - ./data/uv:/root/.local/share/uv        # uv 下载的 Python 版本
     security_opt:
       - no-new-privileges
+    # P8：默认 /dev/shm 只有 64M，编译/浏览器/numpy 多进程共享内存易 ENOSPC，调大到 512M
+    shm_size: "512m"
     # 限制 docker 日志体积：dsh 的 stdout 走 json-file 驱动，不限会在 NAS 上慢慢吃满磁盘
     logging:
       driver: json-file
